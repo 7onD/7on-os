@@ -43,7 +43,7 @@ const FSelect = ({ children, ...props }) => (
 const FTextarea = (props) => <textarea className="form-textarea" {...props} />;
 
 // ── TaskRow ───────────────────────────────────────────────────────────────────
-const TaskRow = ({ task, onToggle, onDelete }) => {
+const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
   const [busy, setBusy] = useState(false);
 
   const handleToggle = async (e) => {
@@ -61,7 +61,7 @@ const TaskRow = ({ task, onToggle, onDelete }) => {
   };
 
   return (
-    <div className="task" data-done={task.done ? '1' : '0'}>
+    <div className="task" data-done={task.done ? '1' : '0'} onClick={() => onOpen && onOpen(task)} style={{ cursor: onOpen ? 'pointer' : 'default' }}>
       <div className={`task-priority ${task.priority}`} />
       <div className="task-check" onClick={handleToggle} style={{ cursor: 'pointer', opacity: busy ? 0.5 : 1 }} />
       <div className="task-body">
@@ -69,6 +69,7 @@ const TaskRow = ({ task, onToggle, onDelete }) => {
         <div className="task-meta">
           <span>{task.due}</span>
           {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
+          {task.description && <><span className="dot" /><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>заметка</span></>}
         </div>
       </div>
       {onDelete && (

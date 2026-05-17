@@ -2,7 +2,10 @@
 const CalendarPage = ({ D, refresh }) => {
   const [showAdd, setShowAdd] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', day: '1', start: '10', end: '11', kind: 'work' });
+  const [form, setForm] = React.useState({ title: '', day: '1', start: '10', end: '11', kind: 'work', description: '' });
+  const [detailEvent, setDetailEvent] = React.useState(null);
+  const [detailForm, setDetailForm] = React.useState({});
+  const [detailSaving, setDetailSaving] = React.useState(false);
 
   const HOURS = Array.from({ length: 11 }, (_, i) => 9 + i);
   const DAYS = [
@@ -15,8 +18,49 @@ const CalendarPage = ({ D, refresh }) => {
     { num: 24, dow: 'Вс' },
   ];
 
+  const KIND_LABELS = { work: 'Работа', deal: 'Сделка', meeting: 'Встреча', personal: 'Личное' };
+  const KIND_COLORS = { deal: 'var(--violet)', work: 'var(--accent)', meeting: 'var(--orange)', personal: 'var(--blue)' };
+
   const cellH = 64;
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setDE = (k, v) => setDetailForm(f => ({ ...f, [k]: v }));
+
+  const openDetail = (e, ev) => {
+    e.stopPropagation();
+    setDetailEvent(ev);
+    setDetailForm({
+      title: ev.title || '',
+      day: String(ev.day),
+      start: String(ev.start),
+      end: String(ev.end),
+      kind: ev.kind || 'work',
+      description: ev.description || '',
+    });
+  };
+
+  const handleDetailSave = async () => {
+    if (!detailEvent) return;
+    setDetailSaving(true);
+    try {
+      await updateEvent(detailEvent.id, {
+        title: detailForm.title,
+        day: parseInt(detailForm.day),
+        start: parseFloat(detailForm.start),
+        end: parseFloat(detailForm.end),
+        kind: detailForm.kind,
+        description: detailForm.description,
+      });
+      await refresh();
+      setDetailEvent(null);
+    } finally { setDetailSaving(false); }
+  };
+
+  const handleDetailDelete = async () => {
+    if (!detailEvent) return;
+    setDetailSaving(true);
+    try { await deleteEvent(detailEvent.id); await refresh(); setDetailEvent(null); }
+    finally { setDetailSaving(false); }
+  };
 
   const handleAdd = async () => {
     if (!form.title.trim()) return;
@@ -28,34 +72,36 @@ const CalendarPage = ({ D, refresh }) => {
         start: parseFloat(form.start),
         end: parseFloat(form.end),
         kind: form.kind,
+        description: form.description,
       });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', day: '1', start: '10', end: '11', kind: 'work' });
+      setForm({ title: '', day: '1', start: '10', end: '11', kind: 'work', description: '' });
     } finally { setSaving(false); }
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteFromGrid = async (id) => {
     await deleteEvent(id);
     await refresh();
   };
 
   const renderEvent = (e) => {
     const top = (e.start - 9) * cellH + 4;
-    const height = (e.end - e.start) * cellH - 8;
+    const height = Math.max((e.end - e.start) * cellH - 8, 24);
     return (
-      <div key={e.id} className={`fcal-event ${e.kind}`} style={{ top, height }}>
-        <div style={{ fontWeight: 500, fontSize: 11.5, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden' }}>{e.title}</div>
+      <div key={e.id} className={`fcal-event ${e.kind}`} style={{ top, height, cursor: 'pointer' }}
+        onClick={(ev) => openDetail(ev, e)}>
+        <div style={{ fontWeight: 500, fontSize: 11.5, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{e.title}</div>
         <div className="when">{formatTime(e.start)} – {formatTime(e.end)}</div>
-        <button onClick={() => handleDelete(e.id)}
-          style={{ position: 'absolute', top: 4, right: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', padding: 2, lineHeight: 1, opacity: 0.6 }}
-          title="Удалить">×</button>
+        <button onClick={ev => { ev.stopPropagation(); handleDeleteFromGrid(e.id); }}
+          style={{ position: 'absolute', top: 3, right: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: '1px 3px', opacity: 0.5, lineHeight: 1, fontSize: 13 }}>×</button>
       </div>
     );
   };
 
   return (
     <div>
+      {/* Add event modal */}
       {showAdd && (
         <Modal title="Новое событие" onClose={() => setShowAdd(false)}
           onConfirm={handleAdd} confirmLabel={saving ? 'Сохранение…' : 'Добавить'}
@@ -86,7 +132,76 @@ const CalendarPage = ({ D, refresh }) => {
             <Field label="Начало (час)"><FInput type="number" min="9" max="19" value={form.start} onChange={e => set('start', e.target.value)} /></Field>
             <Field label="Конец (час)"><FInput type="number" min="9" max="20" value={form.end} onChange={e => set('end', e.target.value)} /></Field>
           </div>
+          <Field label="Описание"><FTextarea placeholder="Адрес, контакты, детали…" value={form.description} onChange={e => set('description', e.target.value)} /></Field>
         </Modal>
+      )}
+
+      {/* Event detail panel */}
+      {detailEvent && (
+        <div className="modal-backdrop" onClick={() => setDetailEvent(null)}>
+          <div className="task-detail-panel" onClick={e => e.stopPropagation()}>
+            <div className="task-detail-header">
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: KIND_COLORS[detailForm.kind], flexShrink: 0, marginTop: 2 }} />
+              <input className="task-detail-title" value={detailForm.title}
+                onChange={e => setDE('title', e.target.value)} placeholder="Название события" />
+              <button className="icon-btn" onClick={() => setDetailEvent(null)}><Icon name="x" size={14} /></button>
+            </div>
+
+            <div className="task-detail-body">
+              <div className="task-detail-meta">
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80 }}>День</span>
+                  <FSelect value={detailForm.day} onChange={e => setDE('day', e.target.value)} style={{ fontSize:13, flex:1 }}>
+                    <option value="1">Пн 18</option><option value="2">Вт 19</option><option value="3">Ср 20</option>
+                    <option value="4">Чт 21</option><option value="5">Пт 22</option><option value="6">Сб 23</option><option value="7">Вс 24</option>
+                  </FSelect>
+                </div>
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80 }}>Время</span>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flex:1 }}>
+                    <FInput type="number" min="9" max="19" value={detailForm.start} onChange={e => setDE('start', e.target.value)} style={{ fontSize:13, width:70 }} />
+                    <span style={{ color:'var(--text-faint)' }}>—</span>
+                    <FInput type="number" min="9" max="20" value={detailForm.end} onChange={e => setDE('end', e.target.value)} style={{ fontSize:13, width:70 }} />
+                    <span className="mono" style={{ fontSize:11, color:'var(--text-faint)' }}>час</span>
+                  </div>
+                </div>
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80 }}>Тип</span>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {Object.entries(KIND_LABELS).map(([k, label]) => (
+                      <button key={k} onClick={() => setDE('kind', k)}
+                        style={{ padding:'4px 10px', borderRadius:6, fontSize:11.5, border:'1px solid', cursor:'pointer',
+                          borderColor: detailForm.kind === k ? KIND_COLORS[k] : 'var(--border)',
+                          background: detailForm.kind === k ? `${KIND_COLORS[k]}22` : 'transparent',
+                          color: detailForm.kind === k ? KIND_COLORS[k] : 'var(--text-dim)' }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop:18 }}>
+                <div className="stat-label" style={{ marginBottom:8 }}>Описание</div>
+                <textarea className="form-textarea" style={{ minHeight:100, fontSize:13, lineHeight:1.6 }}
+                  value={detailForm.description}
+                  onChange={e => setDE('description', e.target.value)}
+                  placeholder="Адрес, контакты, детали встречи…" />
+              </div>
+            </div>
+
+            <div className="task-detail-footer">
+              <button className="btn" style={{ color:'var(--red)', borderColor:'rgba(255,107,122,0.2)' }} onClick={handleDetailDelete} disabled={detailSaving}>
+                <Icon name="trash" size={12} /> Удалить
+              </button>
+              <div style={{ flex:1 }} />
+              <button className="btn ghost" onClick={() => setDetailEvent(null)}>Отмена</button>
+              <button className="btn primary" onClick={handleDetailSave} disabled={detailSaving || !detailForm.title.trim()}>
+                {detailSaving ? 'Сохранение…' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, alignItems: 'center' }}>
@@ -105,30 +220,32 @@ const CalendarPage = ({ D, refresh }) => {
 
       {/* Mobile list view */}
       <div className="cal-mobile">
+        {D.EVENTS.length === 0 && <div className="placeholder">Нет событий на этой неделе</div>}
         {DAYS.map((d, di) => {
-          const dayEvents = D.EVENTS.filter(e => e.day === di + 1);
+          const dayEvents = D.EVENTS.filter(e => e.day === di + 1).sort((a,b) => a.start - b.start);
           if (dayEvents.length === 0) return null;
           return (
             <div key={d.num} style={{ marginBottom: 16 }}>
               <div className="stat-label" style={{ marginBottom: 6 }}>{d.dow} {d.num}</div>
               {dayEvents.map(e => (
-                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 8, marginBottom: 6, alignItems: 'center' }}>
-                  <div style={{ width: 3, borderRadius: 2, alignSelf: 'stretch', background: e.kind === 'deal' ? 'var(--violet)' : e.kind === 'work' ? 'var(--accent)' : e.kind === 'meeting' ? 'var(--orange)' : 'var(--blue)' }} />
+                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 10, marginBottom: 6, alignItems: 'center', cursor: 'pointer' }}
+                  onClick={(ev) => openDetail(ev, e)}>
+                  <div style={{ width: 3, borderRadius: 2, alignSelf: 'stretch', background: KIND_COLORS[e.kind] }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13 }}>{e.title}</div>
-                    <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{formatTime(e.start)} – {formatTime(e.end)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</div>
+                    <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>{formatTime(e.start)} – {formatTime(e.end)}</div>
+                    {e.description ? <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 4 }}>{e.description}</div> : null}
                   </div>
-                  <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => handleDelete(e.id)}><Icon name="trash" size={12} /></button>
+                  <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'meeting' ? 'warm' : 'cold'}`}>{KIND_LABELS[e.kind]}</span>
                 </div>
               ))}
             </div>
           );
         })}
-        {D.EVENTS.length === 0 && <div className="placeholder">Нет событий на этой неделе</div>}
       </div>
 
       {/* Desktop grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }} className="cal-desktop">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }} className="cal-desktop">
         <div className="fcal" style={{ gridTemplateRows: `auto repeat(${HOURS.length}, ${cellH}px)` }}>
           <div className="fcal-corner" />
           {DAYS.map(d => (
@@ -152,10 +269,7 @@ const CalendarPage = ({ D, refresh }) => {
         <div>
           <div className="card">
             <div className="card-header">
-              <div className="card-title">Связано с задачами</div>
-            </div>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 10 }}>
-              Задачи со временем в дедлайне
+              <div className="card-title">Задачи со временем</div>
             </div>
             {D.WORK_TASKS.filter(t => t.due && t.due.includes(':')).slice(0, 4).map(t => (
               <div key={t.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -176,14 +290,9 @@ const CalendarPage = ({ D, refresh }) => {
               <div className="card-title">Легенда</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                ['Сделка', 'deal', 'var(--violet)'],
-                ['Работа', 'work', 'var(--accent)'],
-                ['Встреча', 'meeting', 'var(--orange)'],
-                ['Личное', 'personal', 'var(--blue)'],
-              ].map(([label, key, color]) => (
+              {Object.entries(KIND_LABELS).map(([key, label]) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
-                  <div style={{ width: 3, height: 14, borderRadius: 2, background: color }} />
+                  <div style={{ width: 3, height: 14, borderRadius: 2, background: KIND_COLORS[key] }} />
                   <span>{label}</span>
                   <span className="mono" style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-faint)' }}>
                     {D.EVENTS.filter(e => e.kind === key).length}

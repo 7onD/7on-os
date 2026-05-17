@@ -77,9 +77,9 @@ async function toggleTask(id, done) {
   if (error) throw error;
 }
 
-async function createTask({ title, due, priority, type, tag }) {
+async function createTask({ title, due, priority, type, tag, description }) {
   const id = (type === 'personal' ? 'p' : 'w') + Date.now();
-  const { error } = await sb.from('tasks').insert({ id, title, due, priority, type, tag: tag || null, done: false });
+  const { error } = await sb.from('tasks').insert({ id, title, due, priority, type, tag: tag || null, done: false, description: description || '' });
   if (error) throw error;
 }
 
@@ -171,8 +171,16 @@ async function deleteGoal(id) {
 
 // ── EVENTS ──────────────────────────────────────────────────────────────────
 
-async function createEvent({ day, start, end, title, kind }) {
-  const { error } = await sb.from('events').insert({ day, start_time: start, end_time: end, title, kind });
+async function createEvent({ day, start, end, title, kind, description }) {
+  const { error } = await sb.from('events').insert({ day, start_time: start, end_time: end, title, kind, description: description || '' });
+  if (error) throw error;
+}
+
+async function updateEvent(id, updates) {
+  const payload = { ...updates };
+  if (payload.start !== undefined) { payload.start_time = payload.start; delete payload.start; }
+  if (payload.end !== undefined) { payload.end_time = payload.end; delete payload.end; }
+  const { error } = await sb.from('events').update(payload).eq('id', id);
   if (error) throw error;
 }
 
@@ -191,5 +199,5 @@ Object.assign(window, {
   createFinIncome, deleteFinIncome,
   createFinExpense, deleteFinExpense,
   updateGoal, createGoal, deleteGoal,
-  createEvent, deleteEvent,
+  createEvent, updateEvent, deleteEvent,
 });

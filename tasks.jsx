@@ -2,8 +2,11 @@
 const TasksPage = ({ D, refresh }) => {
   const [filter, setFilter] = React.useState('all');
   const [showAdd, setShowAdd] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '' });
+  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '' });
   const [saving, setSaving] = React.useState(false);
+  const [detailTask, setDetailTask] = React.useState(null);
+  const [detailForm, setDetailForm] = React.useState({});
+  const [detailSaving, setDetailSaving] = React.useState(false);
 
   const filterTasks = (list) => {
     if (filter === 'open') return list.filter(t => !t.done);
@@ -23,16 +26,64 @@ const TasksPage = ({ D, refresh }) => {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await createTask({ title: form.title.trim(), due: form.due, priority: form.priority, type: form.type, tag: form.type === 'work' ? form.tag : null });
+      await createTask({ title: form.title.trim(), due: form.due, priority: form.priority, type: form.type, tag: form.type === 'work' ? form.tag : null, description: form.description });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '' });
+      setForm({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '' });
     } finally { setSaving(false); }
   };
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const openDetail = (task) => {
+    setDetailTask(task);
+    setDetailForm({
+      title: task.title || '',
+      due: task.due || '',
+      priority: task.priority || 'med',
+      description: task.description || '',
+      tag: task.tag || '',
+      done: task.done || false,
+    });
+  };
 
-  const TaskBlock = ({ title, badge, tasks, type }) => (
+  const handleDetailSave = async () => {
+    if (!detailTask) return;
+    setDetailSaving(true);
+    try {
+      await updateTask(detailTask.id, {
+        title: detailForm.title,
+        due: detailForm.due,
+        priority: detailForm.priority,
+        description: detailForm.description,
+        tag: detailForm.tag || null,
+        done: detailForm.done,
+      });
+      await refresh();
+      setDetailTask(null);
+    } finally { setDetailSaving(false); }
+  };
+
+  const handleDetailDelete = async () => {
+    if (!detailTask || !confirm('Удалить задачу?')) return;
+    setDetailSaving(true);
+    try { await deleteTask(detailTask.id); await refresh(); setDetailTask(null); }
+    finally { setDetailSaving(false); }
+  };
+
+  const handleDetailToggle = async () => {
+    if (!detailTask) return;
+    const newDone = !detailForm.done;
+    setDetailForm(f => ({ ...f, done: newDone }));
+    await toggleTask(detailTask.id, newDone);
+    await refresh();
+  };
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setD = (k, v) => setDetailForm(f => ({ ...f, [k]: v }));
+
+  const PRIORITY_LABELS = { high: 'Высокий', med: 'Средний', low: 'Низкий' };
+  const PRIORITY_COLORS = { high: 'var(--red)', med: 'var(--accent)', low: 'var(--blue)' };
+
+  const TaskBlock = ({ title, tasks, type }) => (
     <div className="card">
       <div className="card-header">
         <div className="card-title" style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -49,7 +100,7 @@ const TasksPage = ({ D, refresh }) => {
           <div className="stat-label" style={{ marginTop:4 }}>Сегодня</div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
             {tasks.filter(t => t.due && t.due.startsWith('Сегодня')).map(t =>
-              <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />
+              <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
             )}
           </div>
         </>
@@ -60,20 +111,19 @@ const TasksPage = ({ D, refresh }) => {
           <div className="stat-label" style={{ marginTop:16 }}>Позже</div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
             {tasks.filter(t => !t.due || !t.due.startsWith('Сегодня')).map(t =>
-              <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />
+              <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
             )}
           </div>
         </>
       )}
 
-      {tasks.length === 0 && (
-        <div className="placeholder" style={{ marginTop:8 }}>Нет задач</div>
-      )}
+      {tasks.length === 0 && <div className="placeholder" style={{ marginTop:8 }}>Нет задач</div>}
     </div>
   );
 
   return (
     <div>
+      {/* Add task modal */}
       {showAdd && (
         <Modal title="Новая задача" onClose={() => setShowAdd(false)}
           onConfirm={handleAdd} confirmLabel={saving ? 'Сохранение…' : 'Добавить'}
@@ -104,7 +154,75 @@ const TasksPage = ({ D, refresh }) => {
               <Field label="Метка"><FInput placeholder="Показ, Звонки…" value={form.tag} onChange={e => set('tag', e.target.value)} /></Field>
             )}
           </div>
+          <Field label="Заметки"><FTextarea placeholder="Дополнительная информация…" value={form.description} onChange={e => set('description', e.target.value)} /></Field>
         </Modal>
+      )}
+
+      {/* Task detail panel */}
+      {detailTask && (
+        <div className="modal-backdrop" onClick={() => setDetailTask(null)}>
+          <div className="task-detail-panel" onClick={e => e.stopPropagation()}>
+            <div className="task-detail-header">
+              <button className="task-detail-check" data-done={detailForm.done ? '1' : '0'} onClick={handleDetailToggle} title="Выполнено">
+                {detailForm.done ? <Icon name="check" size={14} /> : null}
+              </button>
+              <input className="task-detail-title" value={detailForm.title}
+                onChange={e => setD('title', e.target.value)}
+                placeholder="Название задачи" />
+              <button className="icon-btn" onClick={() => setDetailTask(null)}><Icon name="x" size={14} /></button>
+            </div>
+
+            <div className="task-detail-body">
+              <div className="task-detail-meta">
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80 }}>Срок</span>
+                  <FInput value={detailForm.due} onChange={e => setD('due', e.target.value)}
+                    placeholder="Сегодня, 20 мая…" style={{ fontSize:13, flex:1 }} />
+                </div>
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80 }}>Приоритет</span>
+                  <div style={{ display:'flex', gap:6 }}>
+                    {['high','med','low'].map(p => (
+                      <button key={p} onClick={() => setD('priority', p)}
+                        style={{ padding:'4px 10px', borderRadius:6, fontSize:11.5, border:'1px solid', cursor:'pointer',
+                          borderColor: detailForm.priority === p ? PRIORITY_COLORS[p] : 'var(--border)',
+                          background: detailForm.priority === p ? `${PRIORITY_COLORS[p]}22` : 'transparent',
+                          color: detailForm.priority === p ? PRIORITY_COLORS[p] : 'var(--text-dim)' }}>
+                        {PRIORITY_LABELS[p]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {detailTask.type === 'work' && (
+                  <div className="task-detail-row">
+                    <span className="stat-label" style={{ minWidth:80 }}>Метка</span>
+                    <FInput value={detailForm.tag} onChange={e => setD('tag', e.target.value)}
+                      placeholder="Показ, Звонки…" style={{ fontSize:13, flex:1 }} />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop:18 }}>
+                <div className="stat-label" style={{ marginBottom:8 }}>Заметки</div>
+                <textarea className="form-textarea" style={{ minHeight:120, fontSize:13, lineHeight:1.6 }}
+                  value={detailForm.description}
+                  onChange={e => setD('description', e.target.value)}
+                  placeholder="Дополнительная информация, ссылки, контакты…" />
+              </div>
+            </div>
+
+            <div className="task-detail-footer">
+              <button className="btn" style={{ color:'var(--red)', borderColor:'rgba(255,107,122,0.2)' }} onClick={handleDetailDelete} disabled={detailSaving}>
+                <Icon name="trash" size={12} /> Удалить
+              </button>
+              <div style={{ flex:1 }} />
+              <button className="btn ghost" onClick={() => setDetailTask(null)}>Отмена</button>
+              <button className="btn primary" onClick={handleDetailSave} disabled={detailSaving || !detailForm.title.trim()}>
+                {detailSaving ? 'Сохранение…' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="page-header">

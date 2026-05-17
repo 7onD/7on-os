@@ -50,7 +50,10 @@ const Sidebar = ({ route, setRoute, counts, userName }) => {
       </button>
 
       <div className="user-card">
-        <div className="avatar">{initials}</div>
+        <div className="avatar" style={{ overflow:'hidden', padding:0 }}>
+          <img src="photo.jpg" alt={userName} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+            onError={e => { e.target.style.display='none'; e.target.parentNode.textContent=initials; }} />
+        </div>
         <div style={{ minWidth: 0 }}>
           <div className="user-name">{userName}</div>
           <div className="user-role">риэлтор</div>
