@@ -1,35 +1,98 @@
-// 7on OS — shared small components
-const { useState, useMemo } = React;
+// 7on OS — shared components
+const { useState, useEffect, useMemo } = React;
 
-const TaskRow = ({ task, onToggle }) => (
-  <div className="task" data-done={task.done ? '1' : '0'} onClick={() => onToggle && onToggle(task.id)}>
-    <div className={`task-priority ${task.priority}`} />
-    <div className="task-check" />
-    <div className="task-body">
-      <div className="task-title">{task.title}</div>
-      <div className="task-meta">
-        <span>{task.due}</span>
-        {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
+// ── Modal ────────────────────────────────────────────────────────────────────
+const Modal = ({ title, onClose, onConfirm, confirmLabel = 'Сохранить', confirmDisabled = false, children }) => {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={14} /></button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {onConfirm && (
+          <div className="modal-footer">
+            <button className="btn ghost" onClick={onClose}>Отмена</button>
+            <button className="btn primary" onClick={onConfirm} disabled={confirmDisabled}>{confirmLabel}</button>
+          </div>
+        )}
       </div>
     </div>
+  );
+};
+
+// ── Form primitives ───────────────────────────────────────────────────────────
+const Field = ({ label, children }) => (
+  <div className="form-field">
+    <label className="form-label">{label}</label>
+    {children}
   </div>
 );
 
-// Mini calendar showing current month with event dots
-const MiniCal = ({ year = 2026, month = 4 /* 0=jan */, today = 18, eventDays = [] }) => {
-  // Build grid: Mon-first
+const FInput = (props) => <input className="form-input" {...props} />;
+const FSelect = ({ children, ...props }) => (
+  <select className="form-select" {...props}>{children}</select>
+);
+const FTextarea = (props) => <textarea className="form-textarea" {...props} />;
+
+// ── TaskRow ───────────────────────────────────────────────────────────────────
+const TaskRow = ({ task, onToggle, onDelete }) => {
+  const [busy, setBusy] = useState(false);
+
+  const handleToggle = async (e) => {
+    e.stopPropagation();
+    if (busy || !onToggle) return;
+    setBusy(true);
+    try { await onToggle(task.id, !task.done); } finally { setBusy(false); }
+  };
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (busy || !onDelete) return;
+    setBusy(true);
+    try { await onDelete(task.id); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="task" data-done={task.done ? '1' : '0'}>
+      <div className={`task-priority ${task.priority}`} />
+      <div className="task-check" onClick={handleToggle} style={{ cursor: 'pointer', opacity: busy ? 0.5 : 1 }} />
+      <div className="task-body">
+        <div className="task-title">{task.title}</div>
+        <div className="task-meta">
+          <span>{task.due}</span>
+          {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
+        </div>
+      </div>
+      {onDelete && (
+        <button className="task-delete" onClick={handleDelete} title="Удалить">
+          <Icon name="trash" size={12} />
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ── MiniCal ──────────────────────────────────────────────────────────────────
+const MiniCal = ({ year = 2026, month = 4, today = 18, eventDays = [] }) => {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const startWeekday = (firstDay.getDay() + 6) % 7; // 0=Mon
+  const startWeekday = (firstDay.getDay() + 6) % 7;
   const daysInMonth = lastDay.getDate();
   const cells = [];
-  // prev month tail
   const prevMonthLast = new Date(year, month, 0).getDate();
   for (let i = startWeekday - 1; i >= 0; i--) cells.push({ d: prevMonthLast - i, out: true });
   for (let d = 1; d <= daysInMonth; d++) cells.push({ d, out: false });
   while (cells.length < 42) cells.push({ d: cells.length - daysInMonth - startWeekday + 1, out: true });
-  const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-  const dows = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   return (
     <div className="minical">
       <div className="minical-head">
@@ -42,22 +105,18 @@ const MiniCal = ({ year = 2026, month = 4 /* 0=jan */, today = 18, eventDays = [
       <div className="minical-grid">
         {dows.map(d => <div key={d} className="minical-dow">{d}</div>)}
         {cells.map((c, i) => (
-          <div
-            key={i}
-            className="minical-day"
+          <div key={i} className="minical-day"
             data-out={c.out ? '1' : '0'}
             data-today={!c.out && c.d === today ? '1' : '0'}
             data-has={!c.out && eventDays.includes(c.d) ? '1' : '0'}
-          >
-            {c.d}
-          </div>
+          >{c.d}</div>
         ))}
       </div>
     </div>
   );
 };
 
-// Bar chart for monthly history
+// ── BarChart ─────────────────────────────────────────────────────────────────
 const BarChart = ({ data, max }) => {
   const maxVal = max || Math.max(...data.map(d => d.income));
   return (
@@ -74,9 +133,10 @@ const BarChart = ({ data, max }) => {
   );
 };
 
+// ── StatusTag ────────────────────────────────────────────────────────────────
 const StatusTag = ({ status }) => {
   const cls = status === 'hot' ? 'hot' : status === 'warm' ? 'warm' : status === 'cold' ? 'cold' : 'work';
-  return <span className={`tag ${cls}`}>{window.SEVEN_DATA.STATUS_LABEL[status]}</span>;
+  return <span className={`tag ${cls}`}>{(window.STATUS_LABEL || {})[status] || status}</span>;
 };
 
-Object.assign(window, { TaskRow, MiniCal, BarChart, StatusTag });
+Object.assign(window, { TaskRow, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea });

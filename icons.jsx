@@ -30,6 +30,8 @@ const Icon = ({ name, size = 16, stroke = 1.6 }) => {
       return <svg {...props}><path d="M12 5v14"/><path d="M5 12l7 7 7-7"/></svg>;
     case 'arrow-right':
       return <svg {...props}><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>;
+    case 'arrow-left':
+      return <svg {...props}><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>;
     case 'phone':
       return <svg {...props}><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>;
     case 'mail':
@@ -52,6 +54,16 @@ const Icon = ({ name, size = 16, stroke = 1.6 }) => {
       return <svg {...props}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>;
     case 'pin':
       return <svg {...props}><path d="M12 2v6"/><path d="M8 8h8l-2 6h-4z"/><path d="M12 14v8"/></svg>;
+    case 'x':
+      return <svg {...props}><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>;
+    case 'trash':
+      return <svg {...props}><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>;
+    case 'edit':
+      return <svg {...props}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    case 'user-plus':
+      return <svg {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>;
+    case 'target':
+      return <svg {...props}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
     default:
       return <svg {...props}><circle cx="12" cy="12" r="9"/></svg>;
   }

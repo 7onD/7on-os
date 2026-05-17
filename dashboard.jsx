@@ -1,14 +1,16 @@
 // 7on OS — Dashboard page
-const Dashboard = ({ setRoute }) => {
-  const D = window.SEVEN_DATA;
+const Dashboard = ({ D, setRoute, refresh }) => {
   const personalCount = D.PERSONAL_TASKS.filter(t => !t.done).length;
   const workCount = D.WORK_TASKS.filter(t => !t.done).length;
   const totalCommission = D.DEALS.reduce((s, d) => s + d.commission, 0);
-  const monthIncome = D.MONTHLY[D.MONTHLY.length - 1].income;
-  const monthExpenses = D.MONTHLY[D.MONTHLY.length - 1].expenses;
+  const monthIncome = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].income : 0;
+  const monthExpenses = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].expenses : 0;
   const hotLeads = D.CONTACTS.filter(c => c.status === 'hot');
 
   const todayEvents = D.EVENTS.filter(e => e.day === 1).slice(0, 4);
+
+  const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
+  const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
 
   return (
     <div>
@@ -30,7 +32,7 @@ const Dashboard = ({ setRoute }) => {
           <div className="stat-big mono">
             <span className="currency">₽</span>{(totalCommission * 1000).toLocaleString('ru-RU')}<span style={{ color: 'var(--text-faint)', fontSize: 16 }}>k</span>
           </div>
-          <div style={{ marginTop: 6 }} className="mono" >
+          <div style={{ marginTop: 6 }} className="mono">
             <span style={{ color: 'var(--violet)', fontSize: 11 }}>{D.DEALS.length} активные сделки</span>
           </div>
         </div>
@@ -64,8 +66,9 @@ const Dashboard = ({ setRoute }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {D.PERSONAL_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} />)}
+            {D.PERSONAL_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />)}
           </div>
+          {D.PERSONAL_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
 
         {/* Work tasks */}
@@ -78,8 +81,9 @@ const Dashboard = ({ setRoute }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {D.WORK_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} />)}
+            {D.WORK_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />)}
           </div>
+          {D.WORK_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
 
         {/* Mini calendar */}
@@ -88,11 +92,11 @@ const Dashboard = ({ setRoute }) => {
             <div className="card-title">Календарь</div>
             <button className="card-link" onClick={() => setRoute('calendar')}>открыть →</button>
           </div>
-          <MiniCal year={2026} month={4} today={18} eventDays={[18, 19, 20, 21, 22, 24, 27, 28, 31]} />
+          <MiniCal year={2026} month={4} today={18} eventDays={[...new Set(D.EVENTS.map(e => e.day + 17))]} />
           <div style={{ marginTop: 16 }}>
             <div className="stat-label" style={{ marginBottom: 8 }}>Сегодня</div>
             {todayEvents.map((e, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < todayEvents.length - 1 ? '1px solid var(--border)' : 0 }}>
+              <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < todayEvents.length - 1 ? '1px solid var(--border)' : 0 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50 }}>{formatTime(e.start)}</span>
                 <span style={{ fontSize: 12.5, flex: 1 }}>{e.title}</span>
                 <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'personal' ? 'cold' : 'warm'}`}>
@@ -100,6 +104,7 @@ const Dashboard = ({ setRoute }) => {
                 </span>
               </div>
             ))}
+            {todayEvents.length === 0 && <div className="placeholder" style={{ padding: 0 }}>Нет событий сегодня</div>}
           </div>
         </div>
 
@@ -149,13 +154,14 @@ const Dashboard = ({ setRoute }) => {
               </div>
             </div>
           ))}
+          {hotLeads.length === 0 && <div className="placeholder">Нет горячих лидов</div>}
         </div>
 
         {/* Active deals */}
         <div className="card" style={{ gridColumn: 'span 7' }}>
           <div className="card-header">
             <div className="card-title">Активные сделки <span className="count">{D.DEALS.length}</span></div>
-            <button className="card-link">детали →</button>
+            <button className="card-link" onClick={() => setRoute('finance')}>детали →</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {D.DEALS.map(d => (
@@ -178,6 +184,7 @@ const Dashboard = ({ setRoute }) => {
               </div>
             ))}
           </div>
+          {D.DEALS.length === 0 && <div className="placeholder">Нет активных сделок</div>}
         </div>
 
         {/* Goals */}
@@ -187,7 +194,7 @@ const Dashboard = ({ setRoute }) => {
             <button className="card-link" onClick={() => setRoute('finance')}>все →</button>
           </div>
           {D.GOALS.map(g => (
-            <div key={g.name} className="goal">
+            <div key={g.id} className="goal">
               <div className="goal-head">
                 <div className="goal-name">{g.name}</div>
                 <div className="goal-pct">{g.pct}%</div>
@@ -196,11 +203,12 @@ const Dashboard = ({ setRoute }) => {
                 <div className="goal-bar" style={{ width: `${g.pct}%` }} />
               </div>
               <div className="goal-meta">
-                <span>₽{g.current.toLocaleString('ru-RU')}k</span>
-                <span>цель ₽{g.target.toLocaleString('ru-RU')}k</span>
+                <span>₽{Number(g.current).toLocaleString('ru-RU')}k</span>
+                <span>цель ₽{Number(g.target).toLocaleString('ru-RU')}k</span>
               </div>
             </div>
           ))}
+          {D.GOALS.length === 0 && <div className="placeholder">Нет целей</div>}
         </div>
       </div>
     </div>
