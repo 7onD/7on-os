@@ -17,12 +17,26 @@ const FONT_OPTIONS   = [
   { value: 'JetBrains Mono', label: 'Mono' },
 ];
 
-const LoadingScreen = () => (
-  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:16, background:'var(--bg)' }}>
-    <div style={{ width:36, height:36, borderRadius:10, background:'var(--accent)', color:'#0a0a0a', display:'grid', placeItems:'center', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:18 }}>7</div>
-    <div style={{ fontFamily:'var(--font-mono)', fontSize:12, color:'var(--text-faint)' }}>Загрузка…</div>
-  </div>
-);
+const LoadingScreen = () => {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSecs(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:16, background:'var(--bg)' }}>
+      <div style={{ width:36, height:36, borderRadius:10, background:'var(--accent)', color:'#0a0a0a', display:'grid', placeItems:'center', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:18 }}>7</div>
+      <div style={{ fontFamily:'var(--font-mono)', fontSize:12, color:'var(--text-faint)' }}>
+        {secs < 3 ? 'Загрузка…' : secs < 6 ? `Подключение к базе… ${secs}с` : 'Ожидание Supabase…'}
+      </div>
+      {secs >= 6 && (
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-faint)', textAlign:'center', maxWidth:260, lineHeight:1.6 }}>
+          Supabase может быть заблокирован провайдером.<br/>Приложение откроется автоматически через несколько секунд.
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MobileNav = ({ route, setRoute }) => {
   const items = [
@@ -51,12 +65,20 @@ const App = () => {
   const [route, setRoute] = useState('dashboard');
   const [D, setD] = useState(null);
   const [error, setError] = useState(null);
+  const [offline, setOffline] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const userName = 'Семён Дементьев';
 
   const refresh = useCallback(async () => {
     await loadAllData();
+    setOffline(window.SUPABASE_OK === false);
     setD({ ...window.SEVEN_DATA });
   }, []);
+
+  const reconnect = async () => {
+    setReconnecting(true);
+    try { await refresh(); } finally { setReconnecting(false); }
+  };
 
   useEffect(() => {
     refresh().catch(err => setError(err.message || 'Ошибка загрузки'));
@@ -105,11 +127,20 @@ const App = () => {
     <div className="app">
       <Sidebar route={route} setRoute={setRoute} counts={counts} userName={userName} />
       <div className="main">
+        {offline && (
+          <div style={{ background:'rgba(255,180,94,0.12)', borderBottom:'1px solid rgba(255,180,94,0.25)', padding:'8px 20px', display:'flex', alignItems:'center', gap:10, fontSize:12, color:'var(--orange)', fontFamily:'var(--font-mono)' }}>
+            <span>⚠ Supabase недоступен — данные не сохраняются. Возможно, заблокирован провайдером.</span>
+            <button onClick={reconnect} disabled={reconnecting}
+              style={{ marginLeft:'auto', padding:'3px 10px', borderRadius:6, border:'1px solid rgba(255,180,94,0.4)', background:'transparent', color:'var(--orange)', cursor:'pointer', fontSize:11, fontFamily:'var(--font-mono)' }}>
+              {reconnecting ? 'Подключение…' : '↻ Переподключить'}
+            </button>
+          </div>
+        )}
         <div className="topbar">
           <div className="topbar-greeting">
             <h1>{PAGE_LABEL[route]}</h1>
             <div className="meta">
-              <span><span className="dot" />онлайн</span>
+              <span><span className="dot" style={{ background: offline ? 'var(--orange)' : undefined }} />{offline ? 'оффлайн' : 'онлайн'}</span>
               <span className="sep">·</span>
               <span>{PAGE_SUBTITLE[route]}</span>
             </div>

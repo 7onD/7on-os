@@ -13,61 +13,65 @@ const STATUS_LABEL = {
 
 // ── LOAD ────────────────────────────────────────────────────────────────────
 
+const EMPTY_DATA = () => ({
+  PERSONAL_TASKS: [], WORK_TASKS: [], CONTACTS: [], DEALS: [],
+  FIN_INCOME: [], FIN_EXPENSES: [], GOALS: [], MONTHLY: [], EVENTS: [],
+  STATUS_LABEL,
+});
+
 async function loadAllData() {
-  const [
-    { data: tasks, error: e1 },
-    { data: contacts, error: e2 },
-    { data: deals, error: e3 },
-    { data: fin_income, error: e4 },
-    { data: fin_expenses, error: e5 },
-    { data: goals, error: e6 },
-    { data: monthly, error: e7 },
-    { data: events, error: e8 },
-  ] = await Promise.all([
-    sb.from('tasks').select('*').order('id'),
-    sb.from('contacts').select('*').order('id'),
-    sb.from('deals').select('*').order('id'),
-    sb.from('fin_income').select('*').order('id'),
-    sb.from('fin_expenses').select('*').order('id'),
-    sb.from('goals').select('*').order('id'),
-    sb.from('monthly').select('*').order('id'),
-    sb.from('events').select('*').order('id'),
-  ]);
+  // Race actual fetch against a 6-second timeout (Supabase can be blocked in RF)
+  let timedOut = false;
 
-  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8;
-  if (err) throw new Error(err.message);
+  const fetchData = async () => {
+    const [
+      { data: tasks,        error: e1 },
+      { data: contacts,     error: e2 },
+      { data: deals,        error: e3 },
+      { data: fin_income,   error: e4 },
+      { data: fin_expenses, error: e5 },
+      { data: goals,        error: e6 },
+      { data: monthly,      error: e7 },
+      { data: events,       error: e8 },
+    ] = await Promise.all([
+      sb.from('tasks').select('*').order('id'),
+      sb.from('contacts').select('*').order('id'),
+      sb.from('deals').select('*').order('id'),
+      sb.from('fin_income').select('*').order('id'),
+      sb.from('fin_expenses').select('*').order('id'),
+      sb.from('goals').select('*').order('id'),
+      sb.from('monthly').select('*').order('id'),
+      sb.from('events').select('*').order('id'),
+    ]);
 
-  const CONTACTS = contacts.map(c => ({
-    ...c,
-    lastContact: c.last_contact,
-    daysSince: c.days_since,
-    nextWhen: c.next_when,
-  }));
+    if (timedOut) return; // timeout already resolved, skip
 
-  const MONTHLY = monthly.map(m => ({
-    ...m,
-    m: m.month,
-    current: m.is_current,
-  }));
+    const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8;
+    if (err) throw new Error(err.message);
 
-  const EVENTS = events.map(e => ({
-    ...e,
-    start: e.start_time,
-    end: e.end_time,
-  }));
+    const CONTACTS = contacts.map(c => ({
+      ...c, lastContact: c.last_contact, daysSince: c.days_since, nextWhen: c.next_when,
+    }));
+    const MONTHLY = monthly.map(m => ({ ...m, m: m.month, current: m.is_current }));
+    const EVENTS  = events.map(e => ({ ...e, start: e.start_time, end: e.end_time }));
 
-  window.SEVEN_DATA = {
-    PERSONAL_TASKS: tasks.filter(t => t.type === 'personal'),
-    WORK_TASKS: tasks.filter(t => t.type === 'work'),
-    CONTACTS,
-    DEALS: deals,
-    FIN_INCOME: fin_income,
-    FIN_EXPENSES: fin_expenses,
-    GOALS: goals,
-    MONTHLY,
-    EVENTS,
-    STATUS_LABEL,
+    window.SUPABASE_OK = true;
+    window.SEVEN_DATA = {
+      PERSONAL_TASKS: tasks.filter(t => t.type === 'personal'),
+      WORK_TASKS: tasks.filter(t => t.type === 'work'),
+      CONTACTS, DEALS: deals, FIN_INCOME: fin_income,
+      FIN_EXPENSES: fin_expenses, GOALS: goals, MONTHLY, EVENTS, STATUS_LABEL,
+    };
   };
+
+  const timeoutPromise = new Promise(resolve => setTimeout(() => {
+    timedOut = true;
+    window.SUPABASE_OK = false;
+    window.SEVEN_DATA = EMPTY_DATA();
+    resolve();
+  }, 6000));
+
+  await Promise.race([fetchData(), timeoutPromise]);
 }
 
 // ── TASKS ───────────────────────────────────────────────────────────────────
