@@ -1,35 +1,38 @@
 // 7on OS — Storage page (Notes + Files)
+// NOTE: FolderPane / NotesPane / EditorPane / FilesPane are render-functions (not components)
+// called as {renderX()} — this prevents React from re-mounting them on every state update,
+// which would cause input focus-loss after every keystroke.
+
 const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
-  const [mode, setMode] = React.useState('notes');
-  const [folder, setFolder] = React.useState('all');
+  const [mode, setMode]               = React.useState('notes');
+  const [folder, setFolder]           = React.useState('all');
   const [selectedNote, setSelectedNote] = React.useState(null);
-  const [search, setSearch] = React.useState('');
+  const [search, setSearch]           = React.useState('');
   const [previewFile, setPreviewFile] = React.useState(null);
-  const [viewMode, setViewMode] = React.useState('grid');
+  const [viewMode, setViewMode]       = React.useState('grid');
   const [mobileScreen, setMobileScreen] = React.useState('folders');
-  const [notes, setNotes] = React.useState(D.NOTES || []);
-  const [saving, setSaving] = React.useState(false);
+  const [notes, setNotes]             = React.useState(D.NOTES || []);
+  const [saving, setSaving]           = React.useState(false);
   const [newNoteTitle, setNewNoteTitle] = React.useState('');
   const [pendingKind, setPendingKind] = React.useState('p');
-  const [slash, setSlash] = React.useState(null);
-  const [newLine, setNewLine] = React.useState('');
-  const newlineRef = React.useRef(null);
+  const [slash, setSlash]             = React.useState(null);
+  const [newLine, setNewLine]         = React.useState('');
+  const [uploading, setUploading]     = React.useState(false);
+  const [uploadError, setUploadError] = React.useState('');
+  const newlineRef  = React.useRef(null);
+  const fileInputRef = React.useRef(null);
 
   React.useEffect(() => { setNotes(D.NOTES || []); }, [D.NOTES]);
-
   React.useEffect(() => {
     if (!selectedNote && notes.length > 0) setSelectedNote(notes[0].id);
   }, [notes]);
 
-  // Handle external navigation (from task/event links)
+  // External navigation (links from tasks/events)
   React.useEffect(() => {
     if (!navTarget) return;
     const { kind, id } = navTarget;
-    if (kind === 'note') {
-      setMode('notes');
-      setSelectedNote(id);
-      setMobileScreen('editor');
-    } else if (kind === 'file') {
+    if (kind === 'note') { setMode('notes'); setSelectedNote(id); setMobileScreen('editor'); }
+    else if (kind === 'file') {
       setMode('files');
       const file = FILES.find(f => f.id === id);
       if (file) setPreviewFile(file);
@@ -39,17 +42,13 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const FOLDERS = D.FOLDERS || [];
   const FILES   = D.FILES   || [];
-
   const stats = typeof calcStorageUsed === 'function' ? calcStorageUsed() : { usedDisplay: '—', capDisplay: '—', pct: 0 };
 
   const filteredNotes = React.useMemo(() => {
     let ns = notes;
     if (folder === 'pinned') return ns.filter(n => n.pinned);
     if (folder !== 'all') ns = ns.filter(n => n.folder === folder);
-    if (search) {
-      const q = search.toLowerCase();
-      ns = ns.filter(n => n.title.toLowerCase().includes(q) || (n.preview || '').toLowerCase().includes(q));
-    }
+    if (search) { const q = search.toLowerCase(); ns = ns.filter(n => n.title.toLowerCase().includes(q) || (n.preview || '').toLowerCase().includes(q)); }
     return ns;
   }, [notes, folder, search]);
 
@@ -58,19 +57,17 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     return FILES.filter(f => f.folder === folder);
   }, [folder, FILES]);
 
-  const cur = notes.find(n => n.id === selectedNote);
-  const pinned = filteredNotes.filter(n => n.pinned);
-  const others  = filteredNotes.filter(n => !n.pinned);
-  const folderCount = id => mode === 'notes'
-    ? notes.filter(n => n.folder === id).length
-    : FILES.filter(f => f.folder === id).length;
+  const cur       = notes.find(n => n.id === selectedNote);
+  const pinned    = filteredNotes.filter(n => n.pinned);
+  const others    = filteredNotes.filter(n => !n.pinned);
+  const folderCount = id => mode === 'notes' ? notes.filter(n => n.folder === id).length : FILES.filter(f => f.folder === id).length;
 
-  // ── Note CRUD ──────────────────────────────────────────────────────────────
   const nowStr = () => {
-    const now = new Date();
-    return `${now.getDate().toString().padStart(2,'0')}.${(now.getMonth()+1).toString().padStart(2,'0')}, ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    const n = new Date();
+    return `${n.getDate().toString().padStart(2,'0')}.${(n.getMonth()+1).toString().padStart(2,'0')}, ${n.getHours().toString().padStart(2,'0')}:${n.getMinutes().toString().padStart(2,'0')}`;
   };
 
+  // ── Note CRUD ──────────────────────────────────────────────────────────────
   const handleCreateNote = async () => {
     if (!newNoteTitle.trim()) return;
     setSaving(true);
@@ -85,11 +82,6 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     } finally { setSaving(false); }
   };
 
-  const handleSaveNote = async (noteId, updates) => {
-    await updateNote(noteId, updates);
-    await refresh();
-  };
-
   const handleDeleteNote = async (noteId) => {
     if (!confirm('Удалить заметку?')) return;
     await deleteNote(noteId);
@@ -99,14 +91,11 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const handleTogglePin = async () => {
     if (!cur) return;
-    await handleSaveNote(cur.id, { pinned: cur.pinned ? 0 : 1, modified: nowStr() });
+    await updateNote(cur.id, { pinned: cur.pinned ? 0 : 1, modified: nowStr() });
+    await refresh();
   };
 
-  const parseBlocks = (raw) => {
-    if (Array.isArray(raw)) return raw;
-    try { return JSON.parse(raw || '[]'); } catch { return []; }
-  };
-
+  const parseBlocks = raw => { if (Array.isArray(raw)) return raw; try { return JSON.parse(raw || '[]'); } catch { return []; } };
   const curBlocks = cur ? parseBlocks(cur.blocks) : [];
 
   const saveBlocks = async (blocks) => {
@@ -117,20 +106,14 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const toggleCheck = async (block) => {
-    const blocks = curBlocks.map(b => b === block ? { ...b, checked: !b.checked } : b);
-    await saveBlocks(blocks);
+    await saveBlocks(curBlocks.map(b => b === block ? { ...b, checked: !b.checked } : b));
   };
 
   const deleteBlock = async (index) => {
-    const blocks = curBlocks.filter((_, i) => i !== index);
-    await saveBlocks(blocks);
+    await saveBlocks(curBlocks.filter((_, i) => i !== index));
   };
 
-  const openNoteById = (id) => {
-    setMode('notes');
-    setSelectedNote(id);
-    setMobileScreen('editor');
-  };
+  const openNoteById = (id) => { setMode('notes'); setSelectedNote(id); setMobileScreen('editor'); };
 
   const onNewLineChange = e => {
     const v = e.target.value;
@@ -138,20 +121,13 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (v.startsWith('/')) {
       const rect = newlineRef.current?.getBoundingClientRect();
       const editorRect = document.querySelector('.editor-body')?.getBoundingClientRect();
-      if (rect && editorRect) {
-        setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: v.slice(1) });
-      }
+      if (rect && editorRect) setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: v.slice(1) });
     } else { setSlash(null); }
   };
 
   const pickItem = async ({ type, item }) => {
     if (!cur) return;
-    let block;
-    if (type === 'file') {
-      block = { kind: 'file', fileId: item.id };
-    } else {
-      block = { kind: 'note', noteId: item.id, title: item.title };
-    }
+    const block = type === 'file' ? { kind: 'file', fileId: item.id } : { kind: 'note', noteId: item.id, title: item.title };
     await saveBlocks([...curBlocks, block]);
     setSlash(null); setNewLine('');
     setTimeout(() => newlineRef.current?.focus(), 50);
@@ -159,12 +135,12 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const onNewLineKey = async e => {
     if (e.key === 'Enter' && !slash && newLine.trim()) {
-      let block;
       const text = newLine.trim();
-      if (pendingKind === 'list') block = { kind: 'list', items: [text] };
+      let block;
+      if (pendingKind === 'list')       block = { kind: 'list',  items: [text] };
       else if (pendingKind === 'check') block = { kind: 'check', text, checked: false };
-      else if (pendingKind === 'h2') block = { kind: 'h2', text };
-      else block = { kind: 'p', text };
+      else if (pendingKind === 'h2')    block = { kind: 'h2',    text };
+      else                              block = { kind: 'p',     text };
       await saveBlocks([...curBlocks, block]);
       setNewLine('');
       setPendingKind('p');
@@ -172,20 +148,47 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (e.key === 'Escape') { setSlash(null); setNewLine(''); }
   };
 
-  const onTitleChange = e => {
-    const title = e.target.value;
-    setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, title } : n));
-  };
-  const onTitleBlur = async e => {
-    if (!cur) return;
-    await updateNote(cur.id, { title: e.target.value, modified: nowStr() });
+  const onTitleChange = e => setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, title: e.target.value } : n));
+  const onTitleBlur  = async e => { if (!cur) return; await updateNote(cur.id, { title: e.target.value, modified: nowStr() }); };
+
+  const openNote   = id => { setSelectedNote(id); setMobileScreen('editor'); };
+
+  // ── File upload ────────────────────────────────────────────────────────────
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    setUploadError('');
+    try {
+      const { id, key } = await uploadFileProxy(file);
+      const now = new Date();
+      await createFileRecord({
+        id, key,
+        name: file.name,
+        type: detectFileType(file.name),
+        size: formatFileSize(file.size),
+        folder: folder !== 'all' && folder !== 'recent' ? folder : 'f-docs',
+        modified: `${now.getDate().toString().padStart(2,'0')}.${(now.getMonth()+1).toString().padStart(2,'0')}`,
+      });
+      await refresh();
+    } catch (err) {
+      setUploadError(err.message || 'Ошибка загрузки');
+      setTimeout(() => setUploadError(''), 5000);
+    } finally { setUploading(false); }
   };
 
-  const openNote = id => { setSelectedNote(id); setMobileScreen('editor'); };
-  const openFolder = id => { setFolder(id); setMobileScreen('list'); };
+  const handleDeleteFile = async (file) => {
+    if (!confirm(`Удалить «${file.name}»?`)) return;
+    await deleteFileRecord(file.id);
+    await refresh();
+  };
 
-  // ── Folder pane ────────────────────────────────────────────────────────────
-  const FolderPane = () => (
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — everything inlined as render-functions (NOT React components)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const renderFolderPane = () => (
     <aside className="storage-pane">
       <div className="storage-pane-head">
         <h3>Хранилище</h3>
@@ -250,8 +253,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     </aside>
   );
 
-  // ── Notes list pane ────────────────────────────────────────────────────────
-  const NotesPane = () => (
+  const renderNotesPane = () => (
     <aside className="storage-pane">
       <div className="storage-pane-head">
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -306,7 +308,9 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
       </div>
       <div style={{ borderTop:'1px solid var(--border)', padding:12 }}>
         <div style={{ display:'flex', gap:8 }}>
-          <input className="form-input" placeholder="Новая заметка…" value={newNoteTitle}
+          <input className="form-input"
+            placeholder="Новая заметка…"
+            value={newNoteTitle}
             onChange={e => setNewNoteTitle(e.target.value)}
             onKeyDown={e => e.key==='Enter' && handleCreateNote()}
             style={{ flex:1, fontSize:12.5 }} />
@@ -318,8 +322,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     </aside>
   );
 
-  // ── Editor pane ────────────────────────────────────────────────────────────
-  const EditorPane = () => (
+  const renderEditorPane = () => (
     <main className="storage-pane editor">
       {cur ? (
         <>
@@ -346,25 +349,23 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
                 setNewLine('/');
                 const rect = newlineRef.current?.getBoundingClientRect();
                 const editorRect = document.querySelector('.editor-body')?.getBoundingClientRect();
-                if (rect && editorRect) {
-                  setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: '' });
-                }
+                if (rect && editorRect) setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: '' });
                 setTimeout(() => newlineRef.current?.focus(), 50);
               }}>
               <Icon name="paperclip" size={14} />
             </button>
             <span className="sep" />
-            <button className="editor-tool" data-on={cur.pinned?'1':'0'} onClick={handleTogglePin} title={cur.pinned?'Открепить':'Закрепить'}>
+            <button className="editor-tool" data-on={cur.pinned?'1':'0'} onClick={handleTogglePin}
+              title={cur.pinned?'Открепить':'Закрепить'}>
               <Icon name="pin" size={14} />
             </button>
             <div className="grow" />
             <div className="editor-meta">
-              <span>{cur.modified}</span>
-              <span>·</span>
-              <span>{curBlocks.length} блоков</span>
+              <span>{cur.modified}</span><span>·</span><span>{curBlocks.length} блоков</span>
             </div>
             <span className="sep" />
-            <button className="editor-tool" onClick={() => handleDeleteNote(cur.id)} style={{ color:'var(--red)' }} title="Удалить заметку">
+            <button className="editor-tool" onClick={() => handleDeleteNote(cur.id)}
+              style={{ color:'var(--red)' }} title="Удалить заметку">
               <Icon name="trash" size={14} />
             </button>
           </div>
@@ -383,7 +384,12 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             ))}
             <div className="editor-newline" style={{ position:'relative' }} ref={newlineRef}>
               <input type="text" value={newLine} onChange={onNewLineChange} onKeyDown={onNewLineKey}
-                placeholder={pendingKind==='list'?'Пункт списка…':pendingKind==='check'?'Элемент чеклиста…':pendingKind==='h2'?'Заголовок…':'Введите текст или «/» для ссылки'}
+                placeholder={
+                  pendingKind==='list'  ? 'Пункт списка…'     :
+                  pendingKind==='check' ? 'Элемент чеклиста…' :
+                  pendingKind==='h2'    ? 'Заголовок…'        :
+                  'Введите текст или «/» для ссылки'
+                }
                 style={{ flex:1, background:'transparent', border:0, outline:0, color:'var(--text)', fontSize:14.5, fontFamily:'var(--font-ui)', width:'100%' }} />
               {!newLine && <span className="hint">/</span>}
             </div>
@@ -401,51 +407,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     </main>
   );
 
-  // ── File upload ────────────────────────────────────────────────────────────
-  const fileInputRef = React.useRef(null);
-  const [uploading, setUploading] = React.useState(false);
-  const [uploadError, setUploadError] = React.useState('');
-
-  const handleFileSelect = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    setUploading(true);
-    setUploadError('');
-    try {
-      const { url, key, id } = await presignUpload(file.name);
-      const uploadRes = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      });
-      if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
-      const now = new Date();
-      const modified = `${now.getDate().toString().padStart(2,'0')}.${(now.getMonth()+1).toString().padStart(2,'0')}`;
-      await createFileRecord({
-        id,
-        name: file.name,
-        type: detectFileType(file.name),
-        size: formatFileSize(file.size),
-        folder: folder !== 'all' && folder !== 'recent' ? folder : 'f-docs',
-        modified,
-        key,
-      });
-      await refresh();
-    } catch (err) {
-      setUploadError(err.message || 'Ошибка загрузки');
-      setTimeout(() => setUploadError(''), 4000);
-    } finally { setUploading(false); }
-  };
-
-  const handleDeleteFile = async (file) => {
-    if (!confirm(`Удалить «${file.name}»?`)) return;
-    await deleteFileRecord(file.id);
-    await refresh();
-  };
-
-  // ── Files pane ─────────────────────────────────────────────────────────────
-  const FilesPane = () => (
+  const renderFilesPane = () => (
     <main className="storage-pane" style={{ gridColumn:'span 2' }}>
       <input ref={fileInputRef} type="file" style={{ display:'none' }} onChange={handleFileSelect} />
       <div className="files-toolbar">
@@ -457,16 +419,14 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
         </div>
         <div style={{ flex:1 }} />
         {uploadError && (
-          <span style={{ fontSize:11.5, color:'var(--red)', fontFamily:'var(--font-mono)' }}>{uploadError}</span>
+          <span style={{ fontSize:11.5, color:'var(--red)', fontFamily:'var(--font-mono)', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{uploadError}</span>
         )}
         <div className="view-switch">
           <button className="view-btn" data-on={viewMode==='grid'?'1':'0'} onClick={() => setViewMode('grid')}><Icon name="grid" size={13} /></button>
           <button className="view-btn" data-on={viewMode==='list'?'1':'0'} onClick={() => setViewMode('list')}><Icon name="rows" size={13} /></button>
         </div>
-        <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-          style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <Icon name="upload" size={13} />
-          {uploading ? 'Загрузка…' : 'Загрузить'}
+        <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+          <Icon name="upload" size={13} /> {uploading ? 'Загрузка…' : 'Загрузить'}
         </button>
       </div>
       <div className="files-body">
@@ -493,8 +453,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             )}
             <div className="files-grid">
               {filteredFiles.map(f => (
-                <div key={f.id} className="file-card" onClick={() => setPreviewFile(f)}
-                  style={{ position:'relative' }}>
+                <div key={f.id} className="file-card" onClick={() => setPreviewFile(f)} style={{ position:'relative' }}>
                   <div className={`file-thumb ${f.type}`}>
                     <Icon name={fileIconName(f.type)} size={32} stroke={1.2} />
                     <span className="badge">{fileTypeLabel(f.type)}</span>
@@ -505,44 +464,53 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     <div className="file-sub"><span>{f.size}</span><span>· {fmtDate(f.modified)}</span></div>
                   </div>
                   {!f.demo && (
-                    <button className="file-card-del" onClick={e => { e.stopPropagation(); handleDeleteFile(f); }}
-                      title="Удалить">
+                    <button className="file-card-del" onClick={e => { e.stopPropagation(); handleDeleteFile(f); }} title="Удалить">
                       <Icon name="x" size={11} />
                     </button>
                   )}
                 </div>
               ))}
             </div>
+            {filteredFiles.length === 0 && (
+              <div style={{ textAlign:'center', padding:'60px 0', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:12 }}>
+                <div style={{ marginBottom:12 }}>Файлов нет</div>
+                <button className="btn" onClick={() => fileInputRef.current?.click()}>
+                  <Icon name="upload" size={13} /> Загрузить первый файл
+                </button>
+              </div>
+            )}
           </>
         ) : (
-          <div className="files-list">
-            <div className="file-row head"><div>Название</div><div>Тип</div><div>Изменён</div><div>Размер</div><div /></div>
-            {filteredFiles.map(f => (
-              <div key={f.id} className="file-row" onClick={() => setPreviewFile(f)}>
-                <div className="name-cell">
-                  <span className={`ic ${f.type}`}><Icon name={fileIconName(f.type)} size={15} /></span>
-                  <div style={{ minWidth:0 }}>
-                    <div className="name">{f.name}</div>
-                    <div className="sub">{FOLDERS.find(fo=>fo.id===f.folder)?.name}{f.demo && ' · demo'}</div>
+          <>
+            <div className="files-list">
+              <div className="file-row head"><div>Название</div><div>Тип</div><div>Изменён</div><div>Размер</div><div /></div>
+              {filteredFiles.map(f => (
+                <div key={f.id} className="file-row" onClick={() => setPreviewFile(f)}>
+                  <div className="name-cell">
+                    <span className={`ic ${f.type}`}><Icon name={fileIconName(f.type)} size={15} /></span>
+                    <div style={{ minWidth:0 }}>
+                      <div className="name">{f.name}</div>
+                      <div className="sub">{FOLDERS.find(fo=>fo.id===f.folder)?.name}{f.demo && ' · demo'}</div>
+                    </div>
+                  </div>
+                  <div className="cell-mono">{fileTypeLabel(f.type)}</div>
+                  <div className="cell-mono">{fmtDate(f.modified)}</div>
+                  <div className="cell-mono">{f.size}</div>
+                  <div onClick={e => e.stopPropagation()}>
+                    {!f.demo && (
+                      <button style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', padding:'2px 4px' }}
+                        onClick={() => handleDeleteFile(f)} title="Удалить">
+                        <Icon name="trash" size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="cell-mono">{fileTypeLabel(f.type)}</div>
-                <div className="cell-mono">{fmtDate(f.modified)}</div>
-                <div className="cell-mono">{f.size}</div>
-                <div onClick={e => e.stopPropagation()}>
-                  {!f.demo && (
-                    <button style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', padding:'2px 4px' }}
-                      onClick={() => handleDeleteFile(f)} title="Удалить">
-                      <Icon name="trash" size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {filteredFiles.length === 0 && (
-          <div className="placeholder" style={{ padding:'40px 0', textAlign:'center' }}>Файлов нет</div>
+              ))}
+            </div>
+            {filteredFiles.length === 0 && (
+              <div style={{ textAlign:'center', padding:'60px 0', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:12 }}>Файлов нет</div>
+            )}
+          </>
         )}
       </div>
     </main>
@@ -550,14 +518,14 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   return (
     <div className="storage" data-mobile-screen={mobileScreen}>
-      <FolderPane />
+      {renderFolderPane()}
       {mode === 'notes' ? (
         <>
-          <NotesPane />
-          <EditorPane />
+          {renderNotesPane()}
+          {renderEditorPane()}
         </>
       ) : (
-        <FilesPane />
+        renderFilesPane()
       )}
       {previewFile && <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
     </div>

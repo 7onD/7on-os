@@ -139,11 +139,26 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
 }
 
-async function presignUpload(filename) {
-  return apiFetch(`action=presign-upload`, { method: 'POST', body: JSON.stringify({ filename }) });
+// Upload a File object through the Cloud Function (no presigned URLs needed).
+// Limit: ~4 MB (base64 overhead ~33%, function body limit ~6 MB).
+async function uploadFileProxy(file) {
+  const MAX = 4 * 1024 * 1024;
+  if (file.size > MAX) throw new Error(`Файл слишком большой (максимум 4 МБ). Большие файлы загружайте через Yandex Cloud Console.`);
+  const base64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  return apiFetch('action=upload', {
+    method: 'POST',
+    body: JSON.stringify({ filename: file.name, data: base64, contentType: file.type || 'application/octet-stream' }),
+  });
 }
-async function presignDownload(key) {
-  return apiFetch(`action=presign-download&key=${encodeURIComponent(key)}`);
+
+// Returns a direct URL to download/open a stored file via the function proxy.
+function getDownloadUrl(key, inline = false) {
+  return `${API}?action=download&key=${encodeURIComponent(key)}${inline ? '&inline=1' : ''}`;
 }
 
 async function createFileRecord({ id, name, type, size, folder, modified, key }) {
@@ -163,6 +178,6 @@ Object.assign(window, {
   updateGoal, createGoal, deleteGoal,
   createEvent, updateEvent, deleteEvent,
   createNote, updateNote, deleteNote,
-  presignUpload, presignDownload, createFileRecord, deleteFileRecord,
+  uploadFileProxy, getDownloadUrl, createFileRecord, deleteFileRecord,
   detectFileType, formatFileSize,
 });

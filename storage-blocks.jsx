@@ -183,7 +183,6 @@ const SlashMenu = ({ query, onPick, onClose, position }) => {
 // ── File preview modal ───────────────────────────────────────────────────────
 const FilePreview = ({ file, onClose }) => {
   if (!file) return null;
-  const [loadingUrl, setLoadingUrl] = _useState(false);
 
   _useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose(); };
@@ -191,26 +190,21 @@ const FilePreview = ({ file, onClose }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const openOrDownload = async (download = false) => {
+  const openOrDownload = (download = false) => {
     if (!file.key) {
       alert('Этот файл является демо-данными и недоступен для скачивания.\nЗагрузите настоящий файл через кнопку «Загрузить».');
       return;
     }
-    setLoadingUrl(true);
-    try {
-      const { url } = await presignDownload(file.key);
-      if (download) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        a.target = '_blank';
-        a.click();
-      } else {
-        window.open(url, '_blank');
-      }
-    } catch (e) {
-      alert('Не удалось получить ссылку: ' + (e.message || e));
-    } finally { setLoadingUrl(false); }
+    const url = getDownloadUrl(file.key, !download);
+    if (download) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.target = '_blank';
+      a.click();
+    } else {
+      window.open(url, '_blank');
+    }
   };
 
   const mockBody = () => {
@@ -245,12 +239,12 @@ const FilePreview = ({ file, onClose }) => {
         <div className="preview-actions">
           <button className="btn ghost" onClick={onClose}>Закрыть</button>
           {file.key && (
-            <button className="btn" onClick={() => openOrDownload(false)} disabled={loadingUrl}>
-              <Icon name="link" size={13} /> {loadingUrl ? '…' : 'Открыть'}
+            <button className="btn" onClick={() => openOrDownload(false)}>
+              <Icon name="link" size={13} /> Открыть
             </button>
           )}
-          <button className="btn primary" onClick={() => openOrDownload(true)} disabled={loadingUrl || !file.key}>
-            <Icon name="download" size={13} /> {loadingUrl ? 'Получение…' : 'Скачать'}
+          <button className="btn primary" onClick={() => openOrDownload(true)} disabled={!file.key}>
+            <Icon name="download" size={13} /> Скачать
           </button>
         </div>
       </div>

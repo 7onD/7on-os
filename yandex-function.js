@@ -1,17 +1,9 @@
 // 7on OS — Yandex Cloud Function
 // Runtime: Node.js 18 | Entry point: index.handler
-// Env vars required:
-//   BUCKET=7on-os-data           (Object Storage bucket name)
-//   YC_KEY_ID=<static-key-id>    (IAM static access key for presigned URLs)
-//   YC_SECRET_KEY=<static-secret> (IAM static access secret)
-// Bucket CORS must allow PUT/GET/HEAD from * with Content-Type header.
+// Env vars: BUCKET=7on-os-data  (Object Storage bucket, service account: storage.editor)
+// File upload/download proxied through this function — no static keys needed.
 
-const crypto = require('crypto');
-
-const BUCKET     = process.env.BUCKET      || '7on-os-data';
-const YC_KEY_ID  = process.env.YC_KEY_ID   || '';
-const YC_SECRET  = process.env.YC_SECRET_KEY || '';
-const REGION     = 'ru-central1';
+const BUCKET = process.env.BUCKET || '7on-os-data';
 
 const TABLES = new Set([
   'tasks', 'contacts', 'deals',
@@ -66,38 +58,6 @@ function parseBody(event) {
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
-// ── Presigned URL (AWS SigV4 — Yandex Object Storage is S3-compatible) ────────
-function presignUrl({ key, method = 'GET', expires = 3600 }) {
-  if (!YC_KEY_ID || !YC_SECRET) throw new Error('YC_KEY_ID / YC_SECRET_KEY not set');
-
-  const now       = new Date();
-  const datestamp = now.toISOString().slice(0, 10).replace(/-/g, '');          // YYYYMMDD
-  const amzdate   = now.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z'; // YYYYMMDDTHHMMSSZ
-  const host      = `${BUCKET}.storage.yandexcloud.net`;
-  const credScope = `${datestamp}/${REGION}/s3/aws4_request`;
-
-  // Build sorted canonical query string
-  const paramsObj = {
-    'X-Amz-Algorithm':     'AWS4-HMAC-SHA256',
-    'X-Amz-Credential':    `${YC_KEY_ID}/${credScope}`,
-    'X-Amz-Date':          amzdate,
-    'X-Amz-Expires':       String(expires),
-    'X-Amz-SignedHeaders': 'host',
-  };
-  const qs = Object.keys(paramsObj).sort()
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(paramsObj[k])}`)
-    .join('&');
-
-  const canonicalReq  = [method, '/' + key, qs, `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');
-  const stringToSign  = ['AWS4-HMAC-SHA256', amzdate, credScope,
-    crypto.createHash('sha256').update(canonicalReq).digest('hex')].join('\n');
-
-  const hmac = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
-  const sigKey = hmac(hmac(hmac(hmac('AWS4' + YC_SECRET, datestamp), REGION), 's3'), 'aws4_request');
-  const sig    = crypto.createHmac('sha256', sigKey).update(stringToSign).digest('hex');
-
-  return `https://${host}/${key}?${qs}&X-Amz-Signature=${sig}`;
-}
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports.handler = async (event) => {
@@ -112,22 +72,48 @@ module.exports.handler = async (event) => {
   if (!table && !action) return reply({ message: '7on OS API v2 — Yandex' });
 
   try {
-    // ── presign-upload: returns presigned PUT URL for direct browser upload ──
-    if (action === 'presign-upload') {
-      const body   = parseBody(event);
-      const ext    = ((body.filename || 'file').split('.').pop() || 'bin').toLowerCase();
+    // ── upload: proxy file upload through function (no CORS/static-keys needed) ─
+    if (action === 'upload') {
+      const body = parseBody(event);
+      const { filename, data: fileData, contentType } = body;
+      if (!filename || !fileData) return reply({ error: 'Missing filename or data' }, 400);
+      const ext    = ((filename.split('.').pop()) || 'bin').toLowerCase();
       const fileId = 'file-' + Date.now();
       const key    = `files/${fileId}.${ext}`;
-      const url    = presignUrl({ key, method: 'PUT', expires: 300 });
-      return reply({ url, key, id: fileId });
+      const token  = await getToken();
+      const buf    = Buffer.from(fileData, 'base64');
+      const r = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType || 'application/octet-stream' },
+        body: buf,
+      });
+      if (!r.ok) throw new Error(`Storage PUT ${r.status}: ${await r.text()}`);
+      return reply({ ok: true, id: fileId, key });
     }
 
-    // ── presign-download: returns presigned GET URL ───────────────────────────
-    if (action === 'presign-download') {
+    // ── download: proxy file download through function ─────────────────────────
+    if (action === 'download') {
       const key = qs.key;
       if (!key) return reply({ error: 'Missing key' }, 400);
-      const url = presignUrl({ key, method: 'GET', expires: 3600 });
-      return reply({ url });
+      const token = await getToken();
+      const r = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) return reply({ error: `File not found (${r.status})` }, r.status);
+      const buf = Buffer.from(await r.arrayBuffer());
+      const ct  = r.headers.get('content-type') || 'application/octet-stream';
+      const fname = key.split('/').pop();
+      const inline = qs.inline === '1';
+      return {
+        statusCode: 200,
+        headers: {
+          ...CORS,
+          'Content-Type': ct,
+          'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(fname)}`,
+        },
+        body: buf.toString('base64'),
+        isBase64Encoded: true,
+      };
     }
 
     // ── Table CRUD ────────────────────────────────────────────────────────────
