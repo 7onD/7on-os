@@ -17,11 +17,16 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [pendingKind, setPendingKind] = React.useState('p');
   const [slash, setSlash]             = React.useState(null);
   const [newLine, setNewLine]         = React.useState('');
-  const [uploading, setUploading]     = React.useState(false);
-  const [uploadError, setUploadError] = React.useState('');
-  const [fileMenuPos, setFileMenuPos] = React.useState(null); // { id, top, left }
-  const [renameFile, setRenameFile]   = React.useState(null);
-  const [renameName, setRenameName]   = React.useState('');
+  const [uploading, setUploading]       = React.useState(false);
+  const [uploadError, setUploadError]   = React.useState('');
+  const [fileMenuPos, setFileMenuPos]   = React.useState(null); // { id, top, left }
+  const [renameFile, setRenameFile]     = React.useState(null);
+  const [renameName, setRenameName]     = React.useState('');
+  const [showNewFolder, setShowNewFolder] = React.useState(false);
+  const [newFolderName, setNewFolderName] = React.useState('');
+  const [newFolderIcon, setNewFolderIcon] = React.useState('folder');
+  const [newFolderColor, setNewFolderColor] = React.useState('#7aa7ff');
+  const [savingFolder, setSavingFolder] = React.useState(false);
   const newlineRef   = React.useRef(null);
   const fileInputRef = React.useRef(null);
   const fileMenuRef  = React.useRef(null);
@@ -198,6 +203,19 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     await refresh();
   };
 
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    setSavingFolder(true);
+    try {
+      await createFolder({ name: newFolderName.trim(), icon: newFolderIcon, color: newFolderColor });
+      await refresh();
+      setShowNewFolder(false);
+      setNewFolderName('');
+      setNewFolderIcon('folder');
+      setNewFolderColor('#7aa7ff');
+    } finally { setSavingFolder(false); }
+  };
+
   const openRename = (file) => {
     setFileMenuPos(null);
     setRenameFile(file);
@@ -233,8 +251,8 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     <aside className="storage-pane">
       <div className="storage-pane-head">
         <h3>Хранилище</h3>
-        <button className="icon-btn" style={{ width:26, height:26 }}
-          onClick={() => { setMode('notes'); setFolder('all'); setMobileScreen('list'); }}>
+        <button className="icon-btn" style={{ width:26, height:26 }} title="Новая папка"
+          onClick={() => setShowNewFolder(true)}>
           <Icon name="plus" size={12} />
         </button>
       </div>
@@ -452,6 +470,10 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     <main className="storage-pane" style={{ gridColumn:'span 2' }}>
       <input ref={fileInputRef} type="file" style={{ display:'none' }} onChange={handleFileSelect} />
       <div className="files-toolbar">
+        <button className="icon-btn storage-back-btn" style={{ width:26, height:26 }}
+          onClick={() => setMobileScreen('folders')}>
+          <Icon name="arrow-left" size={14} />
+        </button>
         <div className="files-breadcrumb">
           <span className="crumb" onClick={() => setFolder('all')}>Хранилище</span>
           {folder !== 'all' && folder !== 'recent' && (
@@ -553,8 +575,49 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     </main>
   );
 
+  const FOLDER_ICONS = ['folder','briefcase','home','file','star','note','archive','users','calendar','chart'];
+  const FOLDER_COLORS = ['#b78cff','#d4ff4d','#7aa7ff','#ffb45e','#ff6b7a','#5ee5a0','#4ad7d1','#ffffff'];
+
   return (
     <div className="storage" data-mobile-screen={mobileScreen}>
+      {/* Create folder modal */}
+      {showNewFolder && (
+        <Modal title="Новая папка"
+          onClose={() => { setShowNewFolder(false); setNewFolderName(''); }}
+          onConfirm={handleCreateFolder}
+          confirmLabel={savingFolder ? 'Создание…' : 'Создать'}
+          confirmDisabled={savingFolder || !newFolderName.trim()}>
+          <Field label="Название">
+            <FInput autoFocus placeholder="Название папки…" value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateFolder()} />
+          </Field>
+          <Field label="Иконка">
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {FOLDER_ICONS.map(ic => (
+                <button key={ic} onClick={() => setNewFolderIcon(ic)}
+                  style={{ width:36, height:36, borderRadius:8, border:`1.5px solid ${newFolderIcon===ic ? newFolderColor : 'var(--border)'}`,
+                    background: newFolderIcon===ic ? `${newFolderColor}22` : 'var(--surface-2)',
+                    display:'grid', placeItems:'center', cursor:'pointer', color: newFolderIcon===ic ? newFolderColor : 'var(--text-dim)' }}>
+                  <Icon name={ic} size={15} />
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Цвет">
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {FOLDER_COLORS.map(c => (
+                <button key={c} onClick={() => setNewFolderColor(c)}
+                  style={{ width:28, height:28, borderRadius:'50%', background:c,
+                    border: newFolderColor===c ? '2px solid var(--text)' : '2px solid transparent',
+                    cursor:'pointer', outline: newFolderColor===c ? '2px solid var(--bg)' : 'none',
+                    outlineOffset:-4 }} />
+              ))}
+            </div>
+          </Field>
+        </Modal>
+      )}
+
       {renderFolderPane()}
       {mode === 'notes' ? (
         <>

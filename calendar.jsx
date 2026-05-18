@@ -10,6 +10,7 @@ const CalendarPage = ({ D, refresh }) => {
   const [calView, setCalView]       = React.useState('week'); // 'week' | 'day' | 'month'
   const [viewDayIdx, setViewDayIdx] = React.useState(0);    // 0-6 for day view
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
+  const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
 
   const HOURS      = Array.from({ length: 12 }, (_, i) => 8 + i); // 8-19
   const BASE_MON   = new Date(2026, 4, 18);
@@ -27,6 +28,15 @@ const CalendarPage = ({ D, refresh }) => {
     return { num: d.getDate(), month: d.getMonth(), year: d.getFullYear(), dow: DOW_NAMES[i], today: weekOffset === 0 && i === 0 };
   });
 
+  // Convert DAYS[i] to ISO date string YYYY-MM-DD
+  const dayToIso = (d) => `${d.year}-${String(d.month + 1).padStart(2,'0')}-${String(d.num).padStart(2,'0')}`;
+
+  // Match event to a day in the current week (supports new event_date or legacy day field)
+  const eventMatchesDay = (ev, dayIdx) => {
+    if (ev.event_date) return ev.event_date === dayToIso(DAYS[dayIdx]);
+    return ev.day === dayIdx + 1; // legacy: day of week 1-7
+  };
+
   const firstD = DAYS[0], lastD = DAYS[6];
   const weekLabel = firstD.month === lastD.month
     ? `${firstD.num}–${lastD.num} ${MONTHS_SHORT[firstD.month]}, ${firstD.year}`
@@ -36,9 +46,7 @@ const CalendarPage = ({ D, refresh }) => {
   const setDE = (k, v) => setDetailForm(f => ({ ...f, [k]: v }));
 
   const openSlot = (dayIdx, hour) => {
-    set('day', String(dayIdx + 1));
-    set('start', String(hour));
-    set('end', String(hour + 1));
+    setForm(f => ({ ...f, day: String(dayIdx + 1), start: String(hour), end: String(hour + 1), _dateStr: dayToIso(DAYS[dayIdx]) }));
     setShowAdd(true);
   };
 
@@ -55,10 +63,13 @@ const CalendarPage = ({ D, refresh }) => {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
+      const dayIdx = parseInt(form.day) - 1;
+      const event_date = form._dateStr || dayToIso(DAYS[dayIdx]);
       await createEvent({
         title: form.title.trim(), day: parseInt(form.day),
         start: parseFloat(form.start), end: parseFloat(form.end),
         kind: form.kind, description: form.description, reminder: parseInt(form.reminder),
+        event_date,
       });
       await refresh();
       setShowAdd(false);
@@ -70,10 +81,13 @@ const CalendarPage = ({ D, refresh }) => {
     if (!detailEvent) return;
     setDetailSaving(true);
     try {
+      const dayIdx = parseInt(detailForm.day) - 1;
+      const event_date = dayToIso(DAYS[dayIdx]);
       await updateEvent(detailEvent.id, {
         title: detailForm.title, day: parseInt(detailForm.day),
         start: parseFloat(detailForm.start), end: parseFloat(detailForm.end),
         kind: detailForm.kind, description: detailForm.description, reminder: parseInt(detailForm.reminder),
+        event_date,
       });
       await refresh(); setDetailEvent(null);
     } finally { setDetailSaving(false); }
@@ -115,16 +129,28 @@ const CalendarPage = ({ D, refresh }) => {
             <span>{d.dow}</span><span className="num">{d.num}</span>
           </div>
         ))}
-        {HOURS.map((h, hi) => (
+        {HOURS.map((h) => (
           <React.Fragment key={h}>
             <div className="fcal-hour">{String(h).padStart(2,'0')}:00</div>
             {DAYS.map((d, di) => (
-              <div key={di} className="fcal-cell" style={{ position:'relative', cursor:'pointer' }}
-                onClick={() => openSlot(di, h)}>
-                {hi === 0 && D.EVENTS.filter(e => e.day === di + 1).map(e => renderEventBlock(e))}
-              </div>
+              <div key={di} className="fcal-cell" style={{ cursor:'pointer' }}
+                onClick={() => openSlot(di, h)} />
             ))}
           </React.Fragment>
+        ))}
+        {/* Event overlays — one per day column, span all hour rows, sit above cells */}
+        {DAYS.map((d, di) => (
+          <div key={`ov-${di}`} style={{
+            gridColumn: `${di + 2}`,
+            gridRow: `2 / ${HOURS.length + 2}`,
+            position: 'relative',
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}>
+            {D.EVENTS.filter(e => eventMatchesDay(e, di)).map(e =>
+              renderEventBlock(e, { style: { left: 4, right: 4, width: 'auto', pointerEvents: 'auto' } })
+            )}
+          </div>
         ))}
       </div>
       <div>
@@ -162,7 +188,7 @@ const CalendarPage = ({ D, refresh }) => {
   // ── Day view ───────────────────────────────────────────────────────────────
   const renderDayView = () => {
     const day = DAYS[viewDayIdx];
-    const dayEvents = D.EVENTS.filter(e => e.day === viewDayIdx + 1);
+    const dayEvents = D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx));
     return (
       <div style={{ display:'grid', gridTemplateColumns:'60px 1fr', gap:0 }} className="cal-desktop">
         <div />
@@ -180,17 +206,19 @@ const CalendarPage = ({ D, refresh }) => {
             <Icon name="chevron-right" size={13} />
           </button>
         </div>
-        {HOURS.map((h, hi) => (
+        {HOURS.map((h) => (
           <React.Fragment key={h}>
             <div className="fcal-hour" style={{ display:'flex', alignItems:'flex-start', paddingTop:8, height:cellH, boxSizing:'border-box' }}>
               {String(h).padStart(2,'0')}:00
             </div>
-            <div className="fcal-cell" style={{ position:'relative', height:cellH, cursor:'pointer' }}
-              onClick={() => openSlot(viewDayIdx, h)}>
-              {hi === 0 && dayEvents.map(e => renderEventBlock(e, { style: { left:4, right:4, width:'auto' } }))}
-            </div>
+            <div className="fcal-cell" style={{ height:cellH, cursor:'pointer' }}
+              onClick={() => openSlot(viewDayIdx, h)} />
           </React.Fragment>
         ))}
+        {/* Day event overlay */}
+        <div style={{ gridColumn:'2', gridRow:`2 / ${HOURS.length + 2}`, position:'relative', pointerEvents:'none', zIndex:5 }}>
+          {dayEvents.map(e => renderEventBlock(e, { style: { left:4, right:4, width:'auto', pointerEvents:'auto' } }))}
+        </div>
       </div>
     );
   };
@@ -213,10 +241,20 @@ const CalendarPage = ({ D, refresh }) => {
     for (let d = 1; d <= daysInMonth; d++) cells.push({ d, cur: true });
     while (cells.length < 42) cells.push({ d: cells.length - daysInMonth - startWeekday + 1, cur: false });
 
-    // Current week days for event mapping: weekday → dayIdx (0-6)
-    // Map weekday of month cell to day index (0=Mon, 6=Sun)
-    const evsByDow = {}; // dow (0-6) → events
-    D.EVENTS.forEach(e => { const dow = e.day - 1; (evsByDow[dow] = evsByDow[dow] || []).push(e); });
+    // Map events to actual dates for the month
+    // Build evsByDate: "YYYY-MM-DD" → events[]
+    const evsByDate = {};
+    D.EVENTS.forEach(e => {
+      if (e.event_date) {
+        (evsByDate[e.event_date] = evsByDate[e.event_date] || []).push(e);
+      } else {
+        // legacy: day 1-7 relative to BASE_MON week
+        const d = new Date(BASE_MON);
+        d.setDate(BASE_MON.getDate() + (e.day - 1));
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        (evsByDate[key] = evsByDate[key] || []).push(e);
+      }
+    });
 
     return (
       <div>
@@ -234,7 +272,8 @@ const CalendarPage = ({ D, refresh }) => {
           ))}
           {cells.map((c, i) => {
             const dow = i % 7;
-            const evs = c.cur ? (evsByDow[dow] || []) : [];
+            const cellDate = c.cur ? `${year}-${String(month+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}` : '';
+            const evs = c.cur ? (evsByDate[cellDate] || []) : [];
             const isToday = c.cur && year === 2026 && month === 4 && c.d === 18;
             return (
               <div key={i} style={{
@@ -265,32 +304,80 @@ const CalendarPage = ({ D, refresh }) => {
     );
   };
 
-  // ── Mobile list view ───────────────────────────────────────────────────────
-  const renderMobileList = () => (
-    <div className="cal-mobile">
-      {D.EVENTS.length === 0 && <div className="placeholder">Нет событий на этой неделе</div>}
-      {DAYS.map((d, di) => {
-        const dayEvents = D.EVENTS.filter(e => e.day === di + 1).sort((a, b) => a.start - b.start);
-        if (dayEvents.length === 0) return null;
-        return (
-          <div key={d.num} style={{ marginBottom:16 }}>
-            <div className="stat-label" style={{ marginBottom:6 }}>{d.dow} {d.num} {MONTHS_SHORT[d.month]}</div>
-            {dayEvents.map(e => (
-              <div key={e.id} style={{ display:'flex', gap:10, padding:'10px 12px', background:'var(--surface-2)', borderRadius:10, marginBottom:6, alignItems:'center', cursor:'pointer' }}
-                onClick={ev => openDetail(ev, e)}>
-                <div style={{ width:3, borderRadius:2, alignSelf:'stretch', background:KIND_COLORS[e.kind] }} />
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:13, fontWeight:500 }}>{e.title}</div>
-                  <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)', marginTop:2 }}>{formatTime(e.start)} – {formatTime(e.end)}</div>
-                </div>
-                <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'meeting' ? 'warm' : 'cold'}`}>{KIND_LABELS[e.kind]}</span>
-              </div>
-            ))}
+  // ── Mobile calendar — Apple-style: week strip + selected day events ──────
+  const renderMobileList = () => {
+    const selDay = DAYS[mobileDayIdx];
+    const selEvents = D.EVENTS.filter(e => eventMatchesDay(e, mobileDayIdx)).sort((a,b) => a.start - b.start);
+    return (
+      <div className="cal-mobile">
+        {/* Week navigation strip */}
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
+          <button className="btn" style={{ padding:'4px 8px' }}
+            onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
+          <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:4 }}>
+            {DAYS.map((d, di) => {
+              const hasEv = D.EVENTS.some(e => eventMatchesDay(e, di));
+              const isSel = di === mobileDayIdx;
+              const isTod = d.today;
+              return (
+                <button key={di} onClick={() => setMobileDayIdx(di)}
+                  style={{
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+                    padding:'6px 2px', borderRadius:10, border:'none', cursor:'pointer',
+                    background: isSel ? 'var(--accent)' : isTod ? 'var(--surface-3)' : 'transparent',
+                    color: isSel ? '#0a0a0a' : 'var(--text)',
+                  }}>
+                  <span style={{ fontFamily:'var(--font-mono)', fontSize:9.5, textTransform:'uppercase',
+                    color: isSel ? '#0a0a0a' : 'var(--text-faint)', letterSpacing:'0.04em' }}>{d.dow}</span>
+                  <span style={{ fontFamily:'var(--font-mono)', fontSize:15, fontWeight: isSel || isTod ? 600 : 400 }}>{d.num}</span>
+                  {hasEv && <div style={{ width:4, height:4, borderRadius:'50%',
+                    background: isSel ? '#0a0a0a' : 'var(--accent)', opacity: isSel ? 0.6 : 1 }} />}
+                </button>
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
-  );
+          <button className="btn" style={{ padding:'4px 8px' }}
+            onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
+        </div>
+
+        {/* Selected day header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:13, fontWeight:500 }}>
+            {selDay.dow}, {selDay.num} {MONTHS_SHORT[selDay.month]}
+            {selDay.today && <span className="tag" style={{ marginLeft:8, fontSize:10 }}>сегодня</span>}
+          </div>
+          <button className="btn primary" style={{ padding:'4px 12px', fontSize:12 }}
+            onClick={() => { openSlot(mobileDayIdx, 10); }}>
+            <Icon name="plus" size={11} /> Событие
+          </button>
+        </div>
+
+        {/* Events for selected day */}
+        {selEvents.length === 0 ? (
+          <div className="placeholder" style={{ padding:'32px 0', textAlign:'center' }}>
+            Нет событий · нажмите «+», чтобы добавить
+          </div>
+        ) : (
+          selEvents.map(e => (
+            <div key={e.id} style={{ display:'flex', gap:10, padding:'12px', background:'var(--surface-2)',
+              borderRadius:12, marginBottom:8, alignItems:'center', cursor:'pointer' }}
+              onClick={ev => openDetail(ev, e)}>
+              <div style={{ width:4, borderRadius:2, alignSelf:'stretch', background:KIND_COLORS[e.kind], flexShrink:0 }} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2 }}>{e.title}</div>
+                <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
+                  {formatTime(e.start)} – {formatTime(e.end)}
+                </div>
+              </div>
+              <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'meeting' ? 'warm' : 'cold'}`}>
+                {KIND_LABELS[e.kind]}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>

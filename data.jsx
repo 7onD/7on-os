@@ -20,14 +20,23 @@ const apiDel   = (t, id)    => apiFetch(`table=${t}&id=${id}`, { method: 'DELETE
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadAllData() {
-  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files] =
+  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files, folders] =
     await Promise.all([
       apiGet('tasks'), apiGet('contacts'), apiGet('deals'),
       apiGet('fin_income'), apiGet('fin_expenses'), apiGet('goals'),
       apiGet('monthly'), apiGet('events'),
       apiGet('notes').catch(() => []),
       apiGet('files').catch(() => []),
+      apiGet('folders').catch(() => []),
     ]);
+
+  // Default folders (shown when API returns empty)
+  const DEFAULT_FOLDERS = [
+    { id: 'f-deals',    name: 'Сделки',     icon: 'briefcase', color: '#b78cff' },
+    { id: 'f-objects',  name: 'Объекты',    icon: 'home',      color: '#d4ff4d' },
+    { id: 'f-docs',     name: 'Документы',  icon: 'file',      color: '#7aa7ff' },
+    { id: 'f-personal', name: 'Личное',     icon: 'star',      color: '#ffb45e' },
+  ];
 
   window.SUPABASE_OK = true;
   window.SEVEN_DATA = {
@@ -42,8 +51,8 @@ async function loadAllData() {
     MONTHLY: monthly.map(m => ({ ...m, m: m.month, current: !!m.is_current })),
     EVENTS: events.map(e => ({ ...e, start: e.start_time, end: e.end_time })),
     NOTES: notes.map(n => ({ ...n, pinned: !!n.pinned, blocks: n.blocks })),
-    FILES: files,   // real uploaded files; storage-data.jsx adds FOLDERS and demo fallback
-    FOLDERS: [],
+    FILES: files,   // real uploaded files; storage-data.jsx adds demo fallback
+    FOLDERS: folders.length > 0 ? folders : DEFAULT_FOLDERS,
     STATUS_LABEL,
   };
 }
@@ -96,8 +105,8 @@ async function createGoal({ name, target, current }) {
 async function deleteGoal(id) { await apiDel('goals', id); }
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
-async function createEvent({ day, start, end, title, kind, description }) {
-  await apiPost('events', { day, start_time: start, end_time: end, title, kind, description: description || '' });
+async function createEvent({ day, start, end, title, kind, description, reminder, event_date }) {
+  await apiPost('events', { day, start_time: start, end_time: end, title, kind, description: description || '', reminder: reminder ?? -1, event_date: event_date || '' });
 }
 async function updateEvent(id, updates) {
   const p = { ...updates };
@@ -106,6 +115,15 @@ async function updateEvent(id, updates) {
   await apiPatch('events', id, p);
 }
 async function deleteEvent(id) { await apiDel('events', id); }
+
+// ── FOLDERS ───────────────────────────────────────────────────────────────────
+async function createFolder({ name, icon, color }) {
+  const id = 'f-' + Date.now();
+  await apiPost('folders', { id, name, icon: icon || 'folder', color: color || '#7aa7ff' });
+  return id;
+}
+async function updateFolder(id, updates) { await apiPatch('folders', id, updates); }
+async function deleteFolder(id) { await apiDel('folders', id); }
 
 // ── NOTES ─────────────────────────────────────────────────────────────────────
 async function createNote({ title, folder, pinned, modified, preview, blocks }) {
@@ -181,4 +199,5 @@ Object.assign(window, {
   createNote, updateNote, deleteNote,
   uploadFileProxy, getDownloadUrl, createFileRecord, updateFileRecord, deleteFileRecord,
   detectFileType, formatFileSize,
+  createFolder, updateFolder, deleteFolder,
 });

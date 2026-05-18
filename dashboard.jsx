@@ -9,7 +9,19 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   const hotLeads = D.CONTACTS.filter(c => c.status === 'hot');
 
   const [calDay, setCalDay] = React.useState(18); // default to today
-  const todayEvents = D.EVENTS.filter(e => e.day === 1).slice(0, 4);
+
+  // eventsByDate: { [dateNum]: count } for May 2026 mini-cal dots
+  // BASE_MON = May 18 = day 1, so date = 17 + day
+  const eventsByDate = {};
+  D.EVENTS.forEach(e => {
+    let date = 0;
+    if (e.event_date && e.event_date.startsWith('2026-05-')) {
+      date = parseInt(e.event_date.slice(8));
+    } else if (e.day) {
+      date = 17 + e.day; // May 18 = day 1 → 18
+    }
+    if (date >= 1 && date <= 31) eventsByDate[date] = (eventsByDate[date] || 0) + 1;
+  });
 
   // Tasks "due on selected day" — match by day number in due string
   const calDayStr = String(calDay);
@@ -19,8 +31,13 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     const m = t.due.match(/(\d+)/);
     return m && m[1] === calDayStr;
   });
-  // Events for selected day
-  const calDayEvents = D.EVENTS.filter(e => e.day === calDay);
+  // Events for selected day — match by event_date or by legacy day-of-week
+  const calDayEvents = D.EVENTS.filter(e => {
+    if (e.event_date && e.event_date.startsWith('2026-05-')) {
+      return parseInt(e.event_date.slice(8)) === calDay;
+    }
+    return 17 + (e.day || 0) === calDay;
+  });
 
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
@@ -86,7 +103,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('calendar')}>открыть →</button>
           </div>
           <MiniCal year={2026} month={4} today={18}
-            eventDays={[...new Set(D.EVENTS.map(e => e.day))]}
+            eventsByDate={eventsByDate}
             selectedDay={calDay}
             onDayClick={setCalDay} />
           <div style={{ marginTop: 16 }}>

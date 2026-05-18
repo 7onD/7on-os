@@ -97,7 +97,7 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
 };
 
 // ── MiniCal ──────────────────────────────────────────────────────────────────
-const MiniCal = ({ year: initYear = 2026, month: initMonth = 4, today = 18, eventDays = [], selectedDay = null, onDayClick }) => {
+const MiniCal = ({ year: initYear = 2026, month: initMonth = 4, today = 18, eventDays = [], eventsByDate = {}, selectedDay = null, onDayClick }) => {
   const [calYear,  setCalYear]  = React.useState(initYear);
   const [calMonth, setCalMonth] = React.useState(initMonth);
 
@@ -131,16 +131,32 @@ const MiniCal = ({ year: initYear = 2026, month: initMonth = 4, today = 18, even
       </div>
       <div className="minical-grid">
         {dows.map(d => <div key={d} className="minical-dow">{d}</div>)}
-        {cells.map((c, i) => (
-          <div key={i} className="minical-day"
-            data-out={c.out ? '1' : '0'}
-            data-today={!c.out && isCurrentMonth && c.d === today ? '1' : '0'}
-            data-has={!c.out && isCurrentMonth && eventDays.includes(c.d) ? '1' : '0'}
-            data-selected={!c.out && isCurrentMonth && c.d === selectedDay ? '1' : '0'}
-            style={!c.out && onDayClick ? { cursor:'pointer' } : undefined}
-            onClick={() => !c.out && onDayClick && onDayClick(c.d)}
-          >{c.d}</div>
-        ))}
+        {cells.map((c, i) => {
+          const evCount = !c.out && isCurrentMonth
+            ? (eventsByDate[c.d] ?? (eventDays.includes(c.d) ? 1 : 0))
+            : 0;
+          return (
+            <div key={i} className="minical-day"
+              data-out={c.out ? '1' : '0'}
+              data-today={!c.out && isCurrentMonth && c.d === today ? '1' : '0'}
+              data-has={evCount > 0 ? '1' : '0'}
+              data-selected={!c.out && isCurrentMonth && c.d === selectedDay ? '1' : '0'}
+              style={!c.out && onDayClick ? { cursor:'pointer' } : undefined}
+              onClick={() => !c.out && onDayClick && onDayClick(c.d)}>
+              <span>{c.d}</span>
+              {evCount > 0 && (
+                <div style={{ display:'flex', justifyContent:'center', gap:2, marginTop:1, height:5, alignItems:'center' }}>
+                  {evCount <= 3
+                    ? Array.from({ length: evCount }).map((_, di) => (
+                        <div key={di} style={{ width:4, height:4, borderRadius:'50%', background:'var(--accent)', flexShrink:0 }} />
+                      ))
+                    : <div style={{ fontSize:9, color:'var(--orange)', fontFamily:'var(--font-mono)', lineHeight:1, fontWeight:600 }}>{evCount}</div>
+                  }
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

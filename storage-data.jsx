@@ -48,10 +48,11 @@ function calcStorageUsed() {
 }
 
 window.calcStorageUsed = calcStorageUsed;
-window.DEMO_FILES = DEMO_FILES;
+window.DEMO_FILES  = DEMO_FILES;
+window.STORAGE_FOLDERS = STORAGE_FOLDERS;
 
-// Attach folders; files are set by data.jsx from API, with demo fallback below
-window.SEVEN_DATA.FOLDERS = STORAGE_FOLDERS;
+// Safety guard: ensure SEVEN_DATA exists (may not yet if data.jsx loadAllData hasn't run)
+if (!window.SEVEN_DATA) window.SEVEN_DATA = { FILES: [], FOLDERS: STORAGE_FOLDERS };
 
 // If data.jsx loaded no real files, show demo files so the page isn't empty
 if (!window.SEVEN_DATA.FILES || window.SEVEN_DATA.FILES.length === 0) {

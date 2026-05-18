@@ -505,8 +505,10 @@ button {
 }
 .minical-day {
   aspect-ratio: 1;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--text-dim);
@@ -521,7 +523,7 @@ button {
   color: #0a0a0a;
   font-weight: 600;
 }
-.minical-day[data-has="1"]::after {
+.minical-day[data-has="1"]::after-DISABLED {
   content: '';
   position: absolute;
   bottom: 4px;
@@ -529,7 +531,8 @@ button {
   border-radius: 50%;
   background: var(--accent);
 }
-.minical-day[data-today="1"][data-has="1"]::after { background: #0a0a0a; }
+.minical-day[data-today="1"] div { opacity: 0.5; }
+.minical-day[data-today="1"] div > div { background: #0a0a0a !important; }
 .minical-day[data-selected="1"]:not([data-today="1"]) { background: var(--surface-3); border: 1px solid var(--border-strong); font-weight: 600; }
 
 /* Numbers / stats */
