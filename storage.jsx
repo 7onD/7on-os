@@ -401,9 +401,53 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     </main>
   );
 
+  // ── File upload ────────────────────────────────────────────────────────────
+  const fileInputRef = React.useRef(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState('');
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    setUploadError('');
+    try {
+      const { url, key, id } = await presignUpload(file.name);
+      const uploadRes = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+      const now = new Date();
+      const modified = `${now.getDate().toString().padStart(2,'0')}.${(now.getMonth()+1).toString().padStart(2,'0')}`;
+      await createFileRecord({
+        id,
+        name: file.name,
+        type: detectFileType(file.name),
+        size: formatFileSize(file.size),
+        folder: folder !== 'all' && folder !== 'recent' ? folder : 'f-docs',
+        modified,
+        key,
+      });
+      await refresh();
+    } catch (err) {
+      setUploadError(err.message || 'Ошибка загрузки');
+      setTimeout(() => setUploadError(''), 4000);
+    } finally { setUploading(false); }
+  };
+
+  const handleDeleteFile = async (file) => {
+    if (!confirm(`Удалить «${file.name}»?`)) return;
+    await deleteFileRecord(file.id);
+    await refresh();
+  };
+
   // ── Files pane ─────────────────────────────────────────────────────────────
   const FilesPane = () => (
     <main className="storage-pane" style={{ gridColumn:'span 2' }}>
+      <input ref={fileInputRef} type="file" style={{ display:'none' }} onChange={handleFileSelect} />
       <div className="files-toolbar">
         <div className="files-breadcrumb">
           <span className="crumb" onClick={() => setFolder('all')}>Хранилище</span>
@@ -412,10 +456,18 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
           )}
         </div>
         <div style={{ flex:1 }} />
+        {uploadError && (
+          <span style={{ fontSize:11.5, color:'var(--red)', fontFamily:'var(--font-mono)' }}>{uploadError}</span>
+        )}
         <div className="view-switch">
           <button className="view-btn" data-on={viewMode==='grid'?'1':'0'} onClick={() => setViewMode('grid')}><Icon name="grid" size={13} /></button>
           <button className="view-btn" data-on={viewMode==='list'?'1':'0'} onClick={() => setViewMode('list')}><Icon name="rows" size={13} /></button>
         </div>
+        <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <Icon name="upload" size={13} />
+          {uploading ? 'Загрузка…' : 'Загрузить'}
+        </button>
       </div>
       <div className="files-body">
         {viewMode === 'grid' ? (
@@ -441,15 +493,23 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             )}
             <div className="files-grid">
               {filteredFiles.map(f => (
-                <div key={f.id} className="file-card" onClick={() => setPreviewFile(f)}>
+                <div key={f.id} className="file-card" onClick={() => setPreviewFile(f)}
+                  style={{ position:'relative' }}>
                   <div className={`file-thumb ${f.type}`}>
                     <Icon name={fileIconName(f.type)} size={32} stroke={1.2} />
                     <span className="badge">{fileTypeLabel(f.type)}</span>
+                    {f.demo && <span className="badge" style={{ right:'auto', left:8, background:'rgba(255,180,94,0.15)', color:'var(--orange)', borderColor:'rgba(255,180,94,0.25)' }}>demo</span>}
                   </div>
                   <div className="file-meta">
                     <div className="file-name">{f.name}</div>
                     <div className="file-sub"><span>{f.size}</span><span>· {fmtDate(f.modified)}</span></div>
                   </div>
+                  {!f.demo && (
+                    <button className="file-card-del" onClick={e => { e.stopPropagation(); handleDeleteFile(f); }}
+                      title="Удалить">
+                      <Icon name="x" size={11} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -463,13 +523,20 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   <span className={`ic ${f.type}`}><Icon name={fileIconName(f.type)} size={15} /></span>
                   <div style={{ minWidth:0 }}>
                     <div className="name">{f.name}</div>
-                    <div className="sub">{FOLDERS.find(fo=>fo.id===f.folder)?.name}</div>
+                    <div className="sub">{FOLDERS.find(fo=>fo.id===f.folder)?.name}{f.demo && ' · demo'}</div>
                   </div>
                 </div>
                 <div className="cell-mono">{fileTypeLabel(f.type)}</div>
                 <div className="cell-mono">{fmtDate(f.modified)}</div>
                 <div className="cell-mono">{f.size}</div>
-                <div style={{ color:'var(--text-faint)' }}><Icon name="more" size={14} /></div>
+                <div onClick={e => e.stopPropagation()}>
+                  {!f.demo && (
+                    <button style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', padding:'2px 4px' }}
+                      onClick={() => handleDeleteFile(f)} title="Удалить">
+                      <Icon name="trash" size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

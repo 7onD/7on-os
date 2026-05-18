@@ -183,11 +183,35 @@ const SlashMenu = ({ query, onPick, onClose, position }) => {
 // ── File preview modal ───────────────────────────────────────────────────────
 const FilePreview = ({ file, onClose }) => {
   if (!file) return null;
+  const [loadingUrl, setLoadingUrl] = _useState(false);
+
   _useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  const openOrDownload = async (download = false) => {
+    if (!file.key) {
+      alert('Этот файл является демо-данными и недоступен для скачивания.\nЗагрузите настоящий файл через кнопку «Загрузить».');
+      return;
+    }
+    setLoadingUrl(true);
+    try {
+      const { url } = await presignDownload(file.key);
+      if (download) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.target = '_blank';
+        a.click();
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (e) {
+      alert('Не удалось получить ссылку: ' + (e.message || e));
+    } finally { setLoadingUrl(false); }
+  };
 
   const mockBody = () => {
     if (file.type === 'image') return <div className="preview-image-mock" />;
@@ -211,7 +235,8 @@ const FilePreview = ({ file, onClose }) => {
             <div className="sub">
               <span>{fileTypeLabel(file.type)}</span>
               <span>· {file.size}</span>
-              <span>· изменён {fmtDate(file.modified)}</span>
+              <span>· {fmtDate(file.modified)}</span>
+              {file.demo && <span style={{ color:'var(--orange)' }}>· demo</span>}
             </div>
           </div>
           <button className="icon-btn" onClick={onClose}><Icon name="x" size={14} /></button>
@@ -219,11 +244,13 @@ const FilePreview = ({ file, onClose }) => {
         <div className="preview-body">{mockBody()}</div>
         <div className="preview-actions">
           <button className="btn ghost" onClick={onClose}>Закрыть</button>
-          <button className="btn primary" onClick={() => {
-            const text = `${file.name} (${file.size})`;
-            navigator.clipboard?.writeText(text).then(() => {}).catch(() => {});
-          }}>
-            <Icon name="link" size={13} /> Скопировать название
+          {file.key && (
+            <button className="btn" onClick={() => openOrDownload(false)} disabled={loadingUrl}>
+              <Icon name="link" size={13} /> {loadingUrl ? '…' : 'Открыть'}
+            </button>
+          )}
+          <button className="btn primary" onClick={() => openOrDownload(true)} disabled={loadingUrl || !file.key}>
+            <Icon name="download" size={13} /> {loadingUrl ? 'Получение…' : 'Скачать'}
           </button>
         </div>
       </div>

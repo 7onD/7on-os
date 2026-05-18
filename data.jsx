@@ -20,11 +20,13 @@ const apiDel   = (t, id)    => apiFetch(`table=${t}&id=${id}`, { method: 'DELETE
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadAllData() {
-  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes] =
+  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files] =
     await Promise.all([
       apiGet('tasks'), apiGet('contacts'), apiGet('deals'),
       apiGet('fin_income'), apiGet('fin_expenses'), apiGet('goals'),
-      apiGet('monthly'), apiGet('events'), apiGet('notes').catch(() => []),
+      apiGet('monthly'), apiGet('events'),
+      apiGet('notes').catch(() => []),
+      apiGet('files').catch(() => []),
     ]);
 
   window.SUPABASE_OK = true;
@@ -40,7 +42,8 @@ async function loadAllData() {
     MONTHLY: monthly.map(m => ({ ...m, m: m.month, current: !!m.is_current })),
     EVENTS: events.map(e => ({ ...e, start: e.start_time, end: e.end_time })),
     NOTES: notes.map(n => ({ ...n, pinned: !!n.pinned, blocks: n.blocks })),
-    FOLDERS: [], FILES: [],
+    FILES: files,   // real uploaded files; storage-data.jsx adds FOLDERS and demo fallback
+    FOLDERS: [],
     STATUS_LABEL,
   };
 }
@@ -117,6 +120,37 @@ async function updateNote(id, updates) {
 }
 async function deleteNote(id) { await apiDel('notes', id); }
 
+// ── FILES ──────────────────────────────────────────────────────────────────────
+function detectFileType(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (ext === 'pdf') return 'pdf';
+  if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) return 'image';
+  if (['doc','docx'].includes(ext)) return 'doc';
+  if (['xls','xlsx','csv'].includes(ext)) return 'sheet';
+  if (['zip','rar','7z','tar','gz'].includes(ext)) return 'zip';
+  if (['md','txt'].includes(ext)) return 'md';
+  return 'file';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
+}
+
+async function presignUpload(filename) {
+  return apiFetch(`action=presign-upload`, { method: 'POST', body: JSON.stringify({ filename }) });
+}
+async function presignDownload(key) {
+  return apiFetch(`action=presign-download&key=${encodeURIComponent(key)}`);
+}
+
+async function createFileRecord({ id, name, type, size, folder, modified, key }) {
+  await apiPost('files', { id, name, type, size, folder: folder || 'f-docs', modified, key });
+}
+async function deleteFileRecord(id) { await apiDel('files', id); }
+
 // ── exports ───────────────────────────────────────────────────────────────────
 window.loadAllData   = loadAllData;
 window.STATUS_LABEL  = STATUS_LABEL;
@@ -129,4 +163,6 @@ Object.assign(window, {
   updateGoal, createGoal, deleteGoal,
   createEvent, updateEvent, deleteEvent,
   createNote, updateNote, deleteNote,
+  presignUpload, presignDownload, createFileRecord, deleteFileRecord,
+  detectFileType, formatFileSize,
 });
