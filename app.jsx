@@ -150,11 +150,12 @@ const LoadingScreen = () => {
 
 const MobileNav = ({ route, setRoute }) => {
   const items = [
-    { id: 'dashboard', label: 'Главная', icon: 'dashboard' },
-    { id: 'tasks',     label: 'Задачи',  icon: 'tasks' },
-    { id: 'calendar',  label: 'Кал.',    icon: 'calendar' },
-    { id: 'finance',   label: 'Финансы', icon: 'finance' },
-    { id: 'contacts',  label: 'CRM',     icon: 'contacts' },
+    { id: 'dashboard', label: 'Главная',   icon: 'dashboard' },
+    { id: 'tasks',     label: 'Задачи',    icon: 'tasks' },
+    { id: 'calendar',  label: 'Календарь', icon: 'calendar' },
+    { id: 'finance',   label: 'Финансы',   icon: 'finance' },
+    { id: 'contacts',  label: 'CRM',       icon: 'contacts' },
+    { id: 'storage',   label: 'Файлы',     icon: 'storage' },
   ];
   return (
     <nav className="mobile-nav">
@@ -237,13 +238,15 @@ const App = () => {
     calendar: 'Календарь',
     finance: 'Финансы',
     contacts: 'Контакты собственников',
+    storage: 'Хранилище',
   };
   const PAGE_SUBTITLE = {
-    dashboard: 'Добрый день, Семён · понедельник, 18 мая 2026',
-    tasks: 'Личные, рабочие и учебные',
-    calendar: 'Неделя 21 · события из задач со временем',
+    dashboard: 'Добрый день, Семён · 18.05.2026',
+    tasks: 'Личные, рабочие, учебные',
+    calendar: 'Неделя 21 · 18–24.05',
     finance: 'Доход, расходы, сделки и цели',
-    contacts: 'Собственники объектов · CRM',
+    contacts: 'Собственники · CRM',
+    storage: 'Заметки и файлы',
   };
 
   return (
@@ -303,6 +306,7 @@ const App = () => {
           {route === 'calendar'  && <CalendarPage D={D} refresh={refresh} />}
           {route === 'finance'   && <FinancePage D={D} refresh={refresh} />}
           {route === 'contacts'  && <ContactsPage D={D} refresh={refresh} />}
+          {route === 'storage'   && <StoragePage  D={D} refresh={refresh} />}
         </div>
       </div>
 

@@ -20,11 +20,11 @@ const apiDel   = (t, id)    => apiFetch(`table=${t}&id=${id}`, { method: 'DELETE
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadAllData() {
-  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events] =
+  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes] =
     await Promise.all([
       apiGet('tasks'), apiGet('contacts'), apiGet('deals'),
       apiGet('fin_income'), apiGet('fin_expenses'), apiGet('goals'),
-      apiGet('monthly'), apiGet('events'),
+      apiGet('monthly'), apiGet('events'), apiGet('notes').catch(() => []),
     ]);
 
   window.SUPABASE_OK = true;
@@ -39,6 +39,8 @@ async function loadAllData() {
     GOALS: goals,
     MONTHLY: monthly.map(m => ({ ...m, m: m.month, current: !!m.is_current })),
     EVENTS: events.map(e => ({ ...e, start: e.start_time, end: e.end_time })),
+    NOTES: notes.map(n => ({ ...n, pinned: !!n.pinned, blocks: n.blocks })),
+    FOLDERS: [], FILES: [],
     STATUS_LABEL,
   };
 }
@@ -102,6 +104,19 @@ async function updateEvent(id, updates) {
 }
 async function deleteEvent(id) { await apiDel('events', id); }
 
+// ── NOTES ─────────────────────────────────────────────────────────────────────
+async function createNote({ title, folder, pinned, modified, preview, blocks }) {
+  const id = 'n' + Date.now();
+  await apiPost('notes', { id, title, folder: folder || 'f-personal', pinned: pinned ? 1 : 0, modified: modified || '', preview: preview || '', blocks: typeof blocks === 'string' ? blocks : JSON.stringify(blocks || []) });
+}
+async function updateNote(id, updates) {
+  const p = { ...updates };
+  if (p.pinned !== undefined) p.pinned = p.pinned ? 1 : 0;
+  if (p.blocks !== undefined && typeof p.blocks !== 'string') p.blocks = JSON.stringify(p.blocks);
+  await apiPatch('notes', id, p);
+}
+async function deleteNote(id) { await apiDel('notes', id); }
+
 // ── exports ───────────────────────────────────────────────────────────────────
 window.loadAllData   = loadAllData;
 window.STATUS_LABEL  = STATUS_LABEL;
@@ -113,4 +128,5 @@ Object.assign(window, {
   createFinExpense, deleteFinExpense,
   updateGoal, createGoal, deleteGoal,
   createEvent, updateEvent, deleteEvent,
+  createNote, updateNote, deleteNote,
 });

@@ -204,18 +204,20 @@ const CalendarPage = ({ D, refresh }) => {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 18, alignItems: 'center' }}>
-        <button className="btn"><Icon name="chevron-left" size={12} /></button>
-        <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>18 – 24 мая, 2026</div>
-        <button className="btn"><Icon name="chevron-right" size={12} /></button>
-        <button className="btn ghost">Сегодня</button>
+      <div className="cal-header" style={{ display: 'flex', gap: 10, marginBottom: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="cal-nav" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn"><Icon name="chevron-left" size={12} /></button>
+          <div className="mono cal-date-label" style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>18–24 мая, 2026</div>
+          <button className="btn"><Icon name="chevron-right" size={12} /></button>
+          <button className="btn ghost">Сегодня</button>
+        </div>
         <div style={{ flex: 1 }} />
-        <div className="filters" style={{ marginBottom: 0 }}>
+        <div className="cal-filters filters" style={{ marginBottom: 0 }}>
           <button className="filter" data-on="1">Неделя</button>
           <button className="filter">День</button>
           <button className="filter">Месяц</button>
         </div>
-        <button className="btn primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Событие</button>
+        <button className="btn primary cal-add-btn" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Событие</button>
       </div>
 
       {/* Mobile list view */}

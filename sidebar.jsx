@@ -6,6 +6,7 @@ const Sidebar = ({ route, setRoute, counts, userName }) => {
     { id: 'calendar', label: 'Календарь', icon: 'calendar' },
     { id: 'finance', label: 'Финансы', icon: 'finance' },
     { id: 'contacts', label: 'Контакты', icon: 'contacts', count: counts.contacts },
+    { id: 'storage',  label: 'Хранилище', icon: 'storage' },
   ];
   const initials = userName.split(' ').map(s => s[0]).slice(0, 2).join('');
   return (
