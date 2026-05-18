@@ -24,14 +24,7 @@ const CalendarPage = ({ D, refresh }) => {
   const DOW_NAMES  = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   const cellH = 64;
 
-  // Default tags shown when DB table is empty (ids match legacy 'kind' values)
-  const DEFAULT_TAGS = [
-    { id: 'work',     name: 'Работа',  color: '#d4ff4d' },
-    { id: 'deal',     name: 'Сделка',  color: '#b78cff' },
-    { id: 'meeting',  name: 'Встреча', color: '#ffb45e' },
-    { id: 'personal', name: 'Личное',  color: '#7aa7ff' },
-  ];
-  const TAGS = (D.CAL_TAGS && D.CAL_TAGS.length > 0) ? D.CAL_TAGS : DEFAULT_TAGS;
+  const TAGS = D.CAL_TAGS || [];
   const KIND_LABELS = Object.fromEntries(TAGS.map(t => [t.id, t.name]));
   const KIND_COLORS = Object.fromEntries(TAGS.map(t => [t.id, t.color]));
 
@@ -239,13 +232,10 @@ const CalendarPage = ({ D, refresh }) => {
                 <span className="mono" style={{ fontSize:10.5, color:'var(--text-faint)', marginRight:4 }}>
                   {D.EVENTS.filter(e => e.kind === tag.id).length}
                 </span>
-                {/* Only allow deleting user-created tags (not the 4 defaults) */}
-                {!['work','deal','meeting','personal'].includes(tag.id) && (
-                  <button className="icon-btn" style={{ width:20, height:20, opacity:0.4, flexShrink:0 }}
-                    title="Удалить тег" onClick={() => handleDeleteTag(tag.id)}>
-                    <Icon name="trash" size={10} />
-                  </button>
-                )}
+                <button className="icon-btn" style={{ width:20, height:20, opacity:0.4, flexShrink:0 }}
+                  title="Удалить тег" onClick={() => handleDeleteTag(tag.id)}>
+                  <Icon name="trash" size={10} />
+                </button>
               </div>
             ))}
           </div>
@@ -473,11 +463,13 @@ const CalendarPage = ({ D, refresh }) => {
             <Field label="День">
               <FSelect value={form.day} onChange={e => set('day', e.target.value)}>{daySelect()}</FSelect>
             </Field>
-            <Field label="Тег">
-              <FSelect value={form.kind} onChange={e => set('kind', e.target.value)}>
-                {TAGS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </FSelect>
-            </Field>
+            {TAGS.length > 0 && (
+              <Field label="Тег">
+                <FSelect value={form.kind} onChange={e => set('kind', e.target.value)}>
+                  {TAGS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </FSelect>
+              </Field>
+            )}
           </div>
           <div className="form-row">
             <Field label="Начало (ч)"><FInput type="number" min="8" max="19" value={form.start} onChange={e => set('start', e.target.value)} /></Field>
@@ -521,13 +513,16 @@ const CalendarPage = ({ D, refresh }) => {
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Тип</span>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                    {TAGS.map(tag => (
-                      <button key={tag.id} onClick={() => setDE('kind', tag.id)}
-                        style={{ padding:'4px 10px', borderRadius:6, fontSize:11.5, border:'1px solid', cursor:'pointer',
-                          borderColor: detailForm.kind === tag.id ? tag.color : 'var(--border)',
-                          background: detailForm.kind === tag.id ? `${tag.color}22` : 'transparent',
-                          color: detailForm.kind === tag.id ? tag.color : 'var(--text-dim)' }}>{tag.name}</button>
-                    ))}
+                    {TAGS.length === 0
+                      ? <span style={{ fontSize:12, color:'var(--text-faint)', fontFamily:'var(--font-mono)' }}>Нет тегов — добавьте в календаре</span>
+                      : TAGS.map(tag => (
+                          <button key={tag.id} onClick={() => setDE('kind', tag.id)}
+                            style={{ padding:'4px 10px', borderRadius:6, fontSize:11.5, border:'1px solid', cursor:'pointer',
+                              borderColor: detailForm.kind === tag.id ? tag.color : 'var(--border)',
+                              background: detailForm.kind === tag.id ? `${tag.color}22` : 'transparent',
+                              color: detailForm.kind === tag.id ? tag.color : 'var(--text-dim)' }}>{tag.name}</button>
+                        ))
+                    }
                   </div>
                 </div>
                 <div className="task-detail-row">
