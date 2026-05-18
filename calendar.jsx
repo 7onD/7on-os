@@ -16,6 +16,7 @@ const CalendarPage = ({ D, refresh }) => {
   const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
   const [savingTag, setSavingTag]       = React.useState(false);
   const [showTagForm, setShowTagForm]   = React.useState(false);
+  const [tagError, setTagError]         = React.useState('');
 
   const HOURS      = Array.from({ length: 12 }, (_, i) => 8 + i); // 8-19
   const BASE_MON   = new Date(2026, 4, 18);
@@ -114,12 +115,15 @@ const CalendarPage = ({ D, refresh }) => {
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
     setSavingTag(true);
+    setTagError('');
     try {
       await createCalTag({ name: newTagName.trim(), color: newTagColor });
       await refresh();
       setNewTagName('');
       setNewTagColor('#d4ff4d');
       setShowTagForm(false);
+    } catch (e) {
+      setTagError(e.message || 'Ошибка сохранения');
     } finally { setSavingTag(false); }
   };
 
@@ -214,12 +218,17 @@ const CalendarPage = ({ D, refresh }) => {
               </div>
               <div style={{ display:'flex', gap:6 }}>
                 <button className="btn ghost" style={{ flex:1, justifyContent:'center' }}
-                  onClick={() => { setShowTagForm(false); setNewTagName(''); }}>Отмена</button>
+                  onClick={() => { setShowTagForm(false); setNewTagName(''); setTagError(''); }}>Отмена</button>
                 <button className="btn primary" style={{ flex:1, justifyContent:'center' }}
                   onClick={handleCreateTag} disabled={savingTag || !newTagName.trim()}>
                   {savingTag ? '…' : 'Создать'}
                 </button>
               </div>
+              {tagError && (
+                <div style={{ marginTop:8, fontSize:11.5, color:'var(--red)', fontFamily:'var(--font-mono)', lineHeight:1.4 }}>
+                  ⚠ {tagError}
+                </div>
+              )}
             </div>
           )}
 
