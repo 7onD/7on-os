@@ -3,7 +3,9 @@
 // called as {renderX()} — this prevents React from re-mounting them on every state update,
 // which would cause input focus-loss after every keystroke.
 
-const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
+const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const refresh = async () => { setRefreshing(true); try { await refreshAll(); } finally { setRefreshing(false); } };
   const [mode, setMode]               = React.useState('notes');
   const [folder, setFolder]           = React.useState('all');
   const [selectedNote, setSelectedNote] = React.useState(null);
@@ -203,6 +205,13 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     await refresh();
   };
 
+  const handleDeleteFolder = async (f) => {
+    if (!confirm(`Удалить папку «${f.name}»? Файлы в ней останутся.`)) return;
+    await deleteFolder(f.id);
+    if (folder === f.id) setFolder('all');
+    await refresh();
+  };
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     setSavingFolder(true);
@@ -251,10 +260,19 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
     <aside className="storage-pane">
       <div className="storage-pane-head">
         <h3>Хранилище</h3>
-        <button className="icon-btn" style={{ width:26, height:26 }} title="Новая папка"
-          onClick={() => setShowNewFolder(true)}>
-          <Icon name="plus" size={12} />
-        </button>
+        <div style={{ display:'flex', gap:4 }}>
+          <button className="icon-btn" style={{ width:26, height:26 }} title="Обновить"
+            onClick={refresh} disabled={refreshing}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ transform: refreshing ? 'rotate(360deg)' : 'none', transition: refreshing ? 'transform 0.6s linear' : 'none' }}>
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+          <button className="icon-btn" style={{ width:26, height:26 }} title="Новая папка"
+            onClick={() => setShowNewFolder(true)}>
+            <Icon name="plus" size={12} />
+          </button>
+        </div>
       </div>
       <div className="mode-switch">
         <button className="mode-btn" data-on={mode==='notes'?'1':'0'} onClick={() => { setMode('notes'); setFolder('all'); }}>
@@ -290,14 +308,25 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
           )}
           <div className="nav-group-label" style={{ padding:'14px 10px 4px' }}>Папки</div>
           {FOLDERS.map(f => (
-            <button key={f.id} className="folder-item" data-active={folder===f.id?'1':'0'}
-              onClick={() => { setFolder(f.id); setMobileScreen('list'); }}>
-              <span className="ic" style={{ color: folder===f.id ? f.color : undefined }}>
-                <Icon name={f.icon} size={14} />
-              </span>
-              <span>{f.name}</span>
-              <span className="cnt">{folderCount(f.id)}</span>
-            </button>
+            <div key={f.id} className="folder-item" data-active={folder===f.id?'1':'0'}
+              style={{ display:'flex', alignItems:'center', gap:0, padding:0, overflow:'hidden' }}>
+              <button style={{ flex:1, display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
+                background:'none', border:'none', cursor:'pointer', color:'inherit', textAlign:'left', minWidth:0 }}
+                onClick={() => { setFolder(f.id); setMobileScreen('list'); }}>
+                <span className="ic" style={{ color: folder===f.id ? f.color : undefined }}>
+                  <Icon name={f.icon} size={14} />
+                </span>
+                <span style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.name}</span>
+                <span className="cnt">{folderCount(f.id)}</span>
+              </button>
+              {!['f-deals','f-objects','f-docs','f-personal'].includes(f.id) && (
+                <button className="icon-btn" style={{ width:24, height:24, flexShrink:0, opacity:0.4, marginRight:4 }}
+                  title="Удалить папку"
+                  onClick={e => { e.stopPropagation(); handleDeleteFolder(f); }}>
+                  <Icon name="trash" size={11} />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>

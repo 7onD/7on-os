@@ -940,6 +940,8 @@ button {
 /* Calendar views */
 .cal-mobile { display: none; }
 .cal-desktop { display: grid; }
+/* Mobile notification bell — hidden on desktop, visible on mobile */
+.notif-mobile-btn { display: none; }
 
 /* ═══ MOBILE ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
@@ -994,6 +996,7 @@ button {
     align-items: center;
   }
   .topbar-stats, .topbar-actions { display: none; }
+  .notif-mobile-btn { display: flex !important; }
   .topbar-spacer { display: none; }
   .topbar-subtitle, .topbar-subtitle-sep { display: none; }
   .search-wrap { min-width: 0; flex: 1; }
@@ -1017,6 +1020,7 @@ button {
 
   /* Calendar grid → hide, show list */
   .fcal { display: none; }
+  .cal-desktop { display: none !important; }
   .cal-mobile { display: block !important; }
 
   /* Contacts panel → full-screen modal style */

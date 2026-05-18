@@ -11,6 +11,7 @@ const CalendarPage = ({ D, refresh }) => {
   const [viewDayIdx, setViewDayIdx] = React.useState(0);    // 0-6 for day view
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
   const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
+  const [mobileView, setMobileView]     = React.useState('week'); // 'week' | 'month'
 
   const HOURS      = Array.from({ length: 12 }, (_, i) => 8 + i); // 8-19
   const BASE_MON   = new Date(2026, 4, 18);
@@ -129,28 +130,17 @@ const CalendarPage = ({ D, refresh }) => {
             <span>{d.dow}</span><span className="num">{d.num}</span>
           </div>
         ))}
-        {HOURS.map((h) => (
+        {HOURS.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="fcal-hour">{String(h).padStart(2,'0')}:00</div>
             {DAYS.map((d, di) => (
-              <div key={di} className="fcal-cell" style={{ cursor:'pointer' }}
-                onClick={() => openSlot(di, h)} />
+              <div key={di} className="fcal-cell"
+                style={{ position:'relative', cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
+                onClick={() => openSlot(di, h)}>
+                {hi === 0 && D.EVENTS.filter(e => eventMatchesDay(e, di)).map(e => renderEventBlock(e))}
+              </div>
             ))}
           </React.Fragment>
-        ))}
-        {/* Event overlays — one per day column, span all hour rows, sit above cells */}
-        {DAYS.map((d, di) => (
-          <div key={`ov-${di}`} style={{
-            gridColumn: `${di + 2}`,
-            gridRow: `2 / ${HOURS.length + 2}`,
-            position: 'relative',
-            pointerEvents: 'none',
-            zIndex: 5,
-          }}>
-            {D.EVENTS.filter(e => eventMatchesDay(e, di)).map(e =>
-              renderEventBlock(e, { style: { left: 4, right: 4, width: 'auto', pointerEvents: 'auto' } })
-            )}
-          </div>
         ))}
       </div>
       <div>
@@ -206,19 +196,18 @@ const CalendarPage = ({ D, refresh }) => {
             <Icon name="chevron-right" size={13} />
           </button>
         </div>
-        {HOURS.map((h) => (
+        {HOURS.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="fcal-hour" style={{ display:'flex', alignItems:'flex-start', paddingTop:8, height:cellH, boxSizing:'border-box' }}>
               {String(h).padStart(2,'0')}:00
             </div>
-            <div className="fcal-cell" style={{ height:cellH, cursor:'pointer' }}
-              onClick={() => openSlot(viewDayIdx, h)} />
+            <div className="fcal-cell"
+              style={{ position:'relative', height:cellH, cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
+              onClick={() => openSlot(viewDayIdx, h)}>
+              {hi === 0 && dayEvents.map(e => renderEventBlock(e, { style: { left:4, right:4, width:'auto' } }))}
+            </div>
           </React.Fragment>
         ))}
-        {/* Day event overlay */}
-        <div style={{ gridColumn:'2', gridRow:`2 / ${HOURS.length + 2}`, position:'relative', pointerEvents:'none', zIndex:5 }}>
-          {dayEvents.map(e => renderEventBlock(e, { style: { left:4, right:4, width:'auto', pointerEvents:'auto' } }))}
-        </div>
       </div>
     );
   };
@@ -308,72 +297,83 @@ const CalendarPage = ({ D, refresh }) => {
   const renderMobileList = () => {
     const selDay = DAYS[mobileDayIdx];
     const selEvents = D.EVENTS.filter(e => eventMatchesDay(e, mobileDayIdx)).sort((a,b) => a.start - b.start);
+
     return (
       <div className="cal-mobile">
-        {/* Week navigation strip */}
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
-          <button className="btn" style={{ padding:'4px 8px' }}
-            onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
-          <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:4 }}>
-            {DAYS.map((d, di) => {
-              const hasEv = D.EVENTS.some(e => eventMatchesDay(e, di));
-              const isSel = di === mobileDayIdx;
-              const isTod = d.today;
-              return (
-                <button key={di} onClick={() => setMobileDayIdx(di)}
-                  style={{
-                    display:'flex', flexDirection:'column', alignItems:'center', gap:2,
-                    padding:'6px 2px', borderRadius:10, border:'none', cursor:'pointer',
-                    background: isSel ? 'var(--accent)' : isTod ? 'var(--surface-3)' : 'transparent',
-                    color: isSel ? '#0a0a0a' : 'var(--text)',
-                  }}>
-                  <span style={{ fontFamily:'var(--font-mono)', fontSize:9.5, textTransform:'uppercase',
-                    color: isSel ? '#0a0a0a' : 'var(--text-faint)', letterSpacing:'0.04em' }}>{d.dow}</span>
-                  <span style={{ fontFamily:'var(--font-mono)', fontSize:15, fontWeight: isSel || isTod ? 600 : 400 }}>{d.num}</span>
-                  {hasEv && <div style={{ width:4, height:4, borderRadius:'50%',
-                    background: isSel ? '#0a0a0a' : 'var(--accent)', opacity: isSel ? 0.6 : 1 }} />}
-                </button>
-              );
-            })}
-          </div>
-          <button className="btn" style={{ padding:'4px 8px' }}
-            onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
+        {/* View toggle */}
+        <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+          <button className="filter" data-on={mobileView==='week'?'1':'0'} onClick={() => setMobileView('week')}>Неделя</button>
+          <button className="filter" data-on={mobileView==='month'?'1':'0'} onClick={() => setMobileView('month')}>Месяц</button>
         </div>
 
-        {/* Selected day header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:13, fontWeight:500 }}>
-            {selDay.dow}, {selDay.num} {MONTHS_SHORT[selDay.month]}
-            {selDay.today && <span className="tag" style={{ marginLeft:8, fontSize:10 }}>сегодня</span>}
-          </div>
-          <button className="btn primary" style={{ padding:'4px 12px', fontSize:12 }}
-            onClick={() => { openSlot(mobileDayIdx, 10); }}>
-            <Icon name="plus" size={11} /> Событие
-          </button>
-        </div>
-
-        {/* Events for selected day */}
-        {selEvents.length === 0 ? (
-          <div className="placeholder" style={{ padding:'32px 0', textAlign:'center' }}>
-            Нет событий · нажмите «+», чтобы добавить
+        {mobileView === 'month' ? (
+          /* Month view on mobile */
+          <div>
+            {renderMonthView()}
           </div>
         ) : (
-          selEvents.map(e => (
-            <div key={e.id} style={{ display:'flex', gap:10, padding:'12px', background:'var(--surface-2)',
-              borderRadius:12, marginBottom:8, alignItems:'center', cursor:'pointer' }}
-              onClick={ev => openDetail(ev, e)}>
-              <div style={{ width:4, borderRadius:2, alignSelf:'stretch', background:KIND_COLORS[e.kind], flexShrink:0 }} />
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2 }}>{e.title}</div>
-                <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
-                  {formatTime(e.start)} – {formatTime(e.end)}
-                </div>
+          /* Week strip view */
+          <>
+            {/* Week navigation strip */}
+            <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:12 }}>
+              <button className="icon-btn" style={{ width:28, height:28, flexShrink:0 }}
+                onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
+              <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:2 }}>
+                {DAYS.map((d, di) => {
+                  const hasEv = D.EVENTS.some(e => eventMatchesDay(e, di));
+                  const isSel = di === mobileDayIdx;
+                  return (
+                    <button key={di} onClick={() => setMobileDayIdx(di)}
+                      style={{
+                        display:'flex', flexDirection:'column', alignItems:'center', gap:1,
+                        padding:'5px 1px', borderRadius:10, border:'none', cursor:'pointer',
+                        background: isSel ? 'var(--accent)' : d.today ? 'var(--surface-3)' : 'transparent',
+                        color: isSel ? '#0a0a0a' : 'var(--text)',
+                      }}>
+                      <span style={{ fontFamily:'var(--font-mono)', fontSize:9, textTransform:'uppercase',
+                        color: isSel ? '#0a0a0a' : 'var(--text-faint)' }}>{d.dow}</span>
+                      <span style={{ fontFamily:'var(--font-mono)', fontSize:14, fontWeight: isSel || d.today ? 600 : 400 }}>{d.num}</span>
+                      {hasEv && <div style={{ width:4, height:4, borderRadius:'50%',
+                        background: isSel ? '#0a0a0a' : 'var(--accent)', opacity: isSel ? 0.7 : 1 }} />}
+                    </button>
+                  );
+                })}
               </div>
-              <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'meeting' ? 'warm' : 'cold'}`}>
-                {KIND_LABELS[e.kind]}
-              </span>
+              <button className="icon-btn" style={{ width:28, height:28, flexShrink:0 }}
+                onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
             </div>
-          ))
+
+            {/* Selected day header */}
+            <div style={{ fontFamily:'var(--font-mono)', fontSize:12.5, fontWeight:500, marginBottom:10, color:'var(--text-dim)' }}>
+              {selDay.dow}, {selDay.num} {MONTHS_SHORT[selDay.month]}
+              {selDay.today && <span className="tag" style={{ marginLeft:8, fontSize:10 }}>сегодня</span>}
+            </div>
+
+            {/* Events for selected day */}
+            {selEvents.length === 0 ? (
+              <div style={{ padding:'28px 0', textAlign:'center', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:12,
+                border:'1.5px dashed var(--border)', borderRadius:14 }}>
+                Нет событий
+              </div>
+            ) : (
+              selEvents.map(e => (
+                <div key={e.id} style={{ display:'flex', gap:10, padding:'12px 14px', background:'var(--surface-2)',
+                  borderRadius:12, marginBottom:8, alignItems:'center', cursor:'pointer' }}
+                  onClick={ev => openDetail(ev, e)}>
+                  <div style={{ width:3, borderRadius:2, alignSelf:'stretch', background:KIND_COLORS[e.kind], flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2 }}>{e.title}</div>
+                    <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
+                      {formatTime(e.start)} – {formatTime(e.end)}
+                    </div>
+                  </div>
+                  <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'meeting' ? 'warm' : 'cold'}`}>
+                    {KIND_LABELS[e.kind]}
+                  </span>
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
     );

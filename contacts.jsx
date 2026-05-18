@@ -64,7 +64,10 @@ const ContactsPage = ({ D, refresh }) => {
     await refresh();
   };
 
-  const ContactFormFields = () => (
+  // NOTE: renderContactFormFields is a render-function (NOT a component — no <X />).
+  // Defining it as a component inside ContactsPage would cause focus loss on each keystroke
+  // because React would see a new function reference each render and remount the entire form.
+  const renderContactFormFields = () => (
     <>
       <Field label="Имя"><FInput placeholder="Орлова Елена Викторовна" value={form.name} onChange={e => set('name',e.target.value)} autoFocus /></Field>
       <div className="form-row">
@@ -95,13 +98,13 @@ const ContactsPage = ({ D, refresh }) => {
       {showAdd && (
         <Modal title="Новый контакт" onClose={() => { setShowAdd(false); setForm(emptyForm); }}
           onConfirm={handleAdd} confirmLabel={saving ? 'Сохранение…' : 'Добавить'} confirmDisabled={saving || !form.name.trim()}>
-          <ContactFormFields />
+          {renderContactFormFields()}
         </Modal>
       )}
       {editing && (
         <Modal title="Редактировать контакт" onClose={() => setEditing(false)}
           onConfirm={handleSaveEdit} confirmLabel={saving ? 'Сохранение…' : 'Сохранить'} confirmDisabled={saving || !form.name.trim()}>
-          <ContactFormFields />
+          {renderContactFormFields()}
         </Modal>
       )}
 

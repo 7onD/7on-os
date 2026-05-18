@@ -201,7 +201,9 @@ const App = () => {
   const [reconnecting, setReconnecting] = useState(false);
   const [query, setQuery] = useState('');
   const [storageTarget, setStorageTarget] = useState(null);
+  const [showNotif, setShowNotif] = useState(false);
   const searchRef = useRef(null);
+  const notifRef  = useRef(null);
   const userName = 'Семён Дементьев';
 
   useEffect(() => {
@@ -242,6 +244,7 @@ const App = () => {
   useEffect(() => {
     const handler = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) setQuery('');
+      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -324,8 +327,17 @@ const App = () => {
               <div className="val tnum">{D.EVENTS.filter(e => e.day === 1).length} событий</div>
             </div>
           </div>
+          {/* Bell button — mobile only (topbar-actions is hidden on mobile) */}
+          <button className="icon-btn notif-mobile-btn" style={{ position:'relative' }}
+            onClick={() => setShowNotif(s => !s)}>
+            <Icon name="bell" size={16} />
+          </button>
+
           <div className="topbar-actions">
-            <button className="icon-btn"><Icon name="bell" size={15} /></button>
+            <button className="icon-btn" style={{ position:'relative' }}
+              onClick={() => setShowNotif(s => !s)}>
+              <Icon name="bell" size={15} />
+            </button>
             <button
               className="icon-btn"
               title="Заблокировать систему"
@@ -347,6 +359,78 @@ const App = () => {
       </div>
 
       <MobileNav route={route} setRoute={setRoute} />
+
+      {/* Notification panel */}
+      {showNotif && D && (() => {
+        const today = new Date().toISOString().slice(0,10);
+        const todayEvs = D.EVENTS.filter(e =>
+          e.event_date ? e.event_date === today : e.day === 1
+        ).sort((a,b)=>a.start-b.start);
+        const allTasks = [...(D.PERSONAL_TASKS||[]), ...(D.WORK_TASKS||[]), ...(D.STUDY_TASKS||[])];
+        const dueTasks = allTasks.filter(t => !t.done && t.due && (
+          t.due.toLowerCase().startsWith('сегодня') || t.due.toLowerCase().startsWith('today')
+        ));
+        const EV_COLORS = { deal:'var(--violet)', work:'var(--accent)', meeting:'var(--orange)', personal:'var(--blue)' };
+        return (
+          <div ref={notifRef} style={{
+            position:'fixed', top:58, right:16, width:300, zIndex:500,
+            background:'var(--surface-2)', border:'1px solid var(--border-strong)',
+            borderRadius:14, padding:'14px 0',
+            boxShadow:'0 12px 40px rgba(0,0,0,0.6)',
+            animation:'popIn 0.18s cubic-bezier(0.16,1,0.3,1)',
+          }}>
+            <div style={{ padding:'0 16px 10px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:12, fontWeight:600 }}>Уведомления</div>
+              <button className="icon-btn" style={{ width:22, height:22 }} onClick={() => setShowNotif(false)}>
+                <Icon name="x" size={12} />
+              </button>
+            </div>
+            {todayEvs.length === 0 && dueTasks.length === 0 && (
+              <div style={{ padding:'24px 16px', textAlign:'center', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:11.5 }}>
+                🔔 Нет событий и задач на сегодня
+              </div>
+            )}
+            {todayEvs.length > 0 && (
+              <>
+                <div style={{ padding:'2px 16px 8px', fontFamily:'var(--font-mono)', fontSize:10, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-faint)' }}>
+                  События сегодня
+                </div>
+                {todayEvs.map(e => (
+                  <div key={e.id} style={{ display:'flex', gap:10, padding:'8px 16px', alignItems:'center' }}
+                    onClick={() => { setShowNotif(false); setRoute('calendar'); }}>
+                    <div style={{ width:3, height:28, borderRadius:2, background:EV_COLORS[e.kind]||'var(--accent)', flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12.5, fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.title}</div>
+                      <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>{formatTime(e.start)} – {formatTime(e.end)}</div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            {dueTasks.length > 0 && (
+              <>
+                <div style={{ padding:'8px 16px 8px', fontFamily:'var(--font-mono)', fontSize:10, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-faint)', borderTop: todayEvs.length ? '1px solid var(--border)' : 'none', marginTop: todayEvs.length ? 4 : 0 }}>
+                  Задачи на сегодня
+                </div>
+                {dueTasks.slice(0,5).map(t => (
+                  <div key={t.id} style={{ display:'flex', gap:10, padding:'7px 16px', alignItems:'center', cursor:'pointer' }}
+                    onClick={() => { setShowNotif(false); setRoute('tasks'); }}>
+                    <span className={`task-priority ${t.priority}`} style={{ flexShrink:0 }} />
+                    <div style={{ fontSize:12.5, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
+                  </div>
+                ))}
+              </>
+            )}
+            <div style={{ padding:'8px 16px 0', borderTop:'1px solid var(--border)', marginTop:8 }}>
+              <button className="btn ghost" style={{ width:'100%', justifyContent:'center', fontSize:11.5 }}
+                onClick={() => { setShowNotif(false); setRoute('calendar'); }}>
+                Открыть календарь →
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {D && <RemindersManager
         tasks={[...(D.PERSONAL_TASKS||[]), ...(D.WORK_TASKS||[]), ...(D.STUDY_TASKS||[])]}
         events={D.EVENTS||[]} />}
