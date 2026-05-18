@@ -1,11 +1,11 @@
 // 7on OS — Yandex Cloud data layer
-const API = 'https://functions.yandexcloud.net/d4eck1v8o203hh4lr9ov/api';
+const API = 'https://functions.yandexcloud.net/d4eck1v8o203hh4lr9ov';
 
 const STATUS_LABEL = { hot: 'Горячий', warm: 'Тёплый', work: 'В работе', cold: 'Холодный' };
 
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
-async function apiFetch(path, options = {}) {
-  const r = await fetch(`${API}/${path}`, {
+async function apiFetch(qs, options = {}) {
+  const r = await fetch(`${API}?${qs}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   });
@@ -13,10 +13,10 @@ async function apiFetch(path, options = {}) {
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
 }
-const apiGet   = (t)         => apiFetch(t);
-const apiPost  = (t, body)   => apiFetch(t,       { method: 'POST',   body: JSON.stringify(body) });
-const apiPatch = (t, id, b)  => apiFetch(`${t}/${id}`, { method: 'PATCH',  body: JSON.stringify(b) });
-const apiDel   = (t, id)     => apiFetch(`${t}/${id}`, { method: 'DELETE' });
+const apiGet   = (t)        => apiFetch(`table=${t}`);
+const apiPost  = (t, body)  => apiFetch(`table=${t}`,          { method: 'POST',   body: JSON.stringify(body) });
+const apiPatch = (t, id, b) => apiFetch(`table=${t}&id=${id}`, { method: 'PATCH',  body: JSON.stringify(b) });
+const apiDel   = (t, id)    => apiFetch(`table=${t}&id=${id}`, { method: 'DELETE' });
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadAllData() {

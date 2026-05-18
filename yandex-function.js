@@ -1,7 +1,6 @@
-// 7on OS — Yandex Cloud Function (вставить в редактор кода)
+// 7on OS — Yandex Cloud Function
 // Runtime: Node.js 18 | Entry point: index.handler
-// Env vars: BUCKET=7on-os-data
-// Service account: storage.editor
+// Env: BUCKET=7on-os-data | Service account: storage.editor
 
 const BUCKET = process.env.BUCKET || '7on-os-data';
 const TABLES = new Set(['tasks','contacts','deals','fin_income','fin_expenses','goals','monthly','events']);
@@ -12,19 +11,19 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const ok  = (d, s = 200) => ({ statusCode: s, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-const err = (m, s = 400) => ({ statusCode: s, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: m }) });
+const reply = (d, s = 200) => ({
+  statusCode: s,
+  headers: { ...CORS, 'Content-Type': 'application/json' },
+  body: JSON.stringify(d),
+});
 
-// IAM-токен через сервисный аккаунт (автоматически)
 async function getToken() {
   const r = await fetch('http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token', {
     headers: { 'Metadata-Flavor': 'Google' },
   });
-  const d = await r.json();
-  return d.access_token;
+  return (await r.json()).access_token;
 }
 
-// Чтение JSON-файла из Object Storage
 async function getTable(token, table) {
   const r = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${table}.json`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -34,7 +33,6 @@ async function getTable(token, table) {
   return r.json();
 }
 
-// Запись JSON-файла в Object Storage
 async function saveTable(token, table, data) {
   const body = JSON.stringify(data);
   const r = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${table}.json`, {
@@ -45,7 +43,6 @@ async function saveTable(token, table, data) {
   if (!r.ok) throw new Error(`PUT ${table}: ${r.status} — ${await r.text()}`);
 }
 
-// Парсинг тела запроса (может быть base64)
 function parseBody(event) {
   const raw = event.isBase64Encoded
     ? Buffer.from(event.body || '', 'base64').toString('utf-8')
@@ -58,56 +55,49 @@ module.exports.handler = async (event) => {
 
   if (method === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
 
-  // Разбор пути: /api/tasks/ID или /tasks/ID
-  const parts = (event.path || '/').replace(/^\/+/, '').split('/');
-  const offset = parts[0] === 'api' ? 1 : 0;
-  const table  = parts[offset];
-  const id     = parts[offset + 1];
+  // Параметры из query string: ?table=tasks&id=123
+  const qs    = event.queryStringParameters || {};
+  const table = qs.table;
+  const id    = qs.id;
 
-  if (!table) return ok({ message: '7on OS API — Yandex Cloud' });
-  if (!TABLES.has(table)) return err('Unknown table', 403);
+  if (!table) return reply({ message: '7on OS API — Yandex' });
+  if (!TABLES.has(table)) return reply({ error: 'Unknown table' }, 403);
 
   try {
     const token = await getToken();
 
-    // GET — вернуть все записи
     if (method === 'GET') {
-      return ok(await getTable(token, table));
+      return reply(await getTable(token, table));
     }
 
-    // POST — добавить запись
     if (method === 'POST') {
       const body = parseBody(event);
       const data = await getTable(token, table);
-      // Автоинкремент для таблиц без явного id
       if (body.id === undefined) {
         body.id = data.length > 0 ? Math.max(...data.map(r => Number(r.id) || 0)) + 1 : 1;
       }
       data.push(body);
       await saveTable(token, table, data);
-      return ok({ ok: true });
+      return reply({ ok: true });
     }
 
-    // PATCH — обновить запись по id
     if (method === 'PATCH') {
-      if (!id) return err('Missing id');
+      if (!id) return reply({ error: 'Missing id' }, 400);
       const body = parseBody(event);
       const data = await getTable(token, table);
-      const updated = data.map(row => String(row.id) === String(id) ? { ...row, ...body } : row);
-      await saveTable(token, table, updated);
-      return ok({ ok: true });
+      await saveTable(token, table, data.map(r => String(r.id) === String(id) ? { ...r, ...body } : r));
+      return reply({ ok: true });
     }
 
-    // DELETE — удалить запись по id
     if (method === 'DELETE') {
-      if (!id) return err('Missing id');
+      if (!id) return reply({ error: 'Missing id' }, 400);
       const data = await getTable(token, table);
-      await saveTable(token, table, data.filter(row => String(row.id) !== String(id)));
-      return ok({ ok: true });
+      await saveTable(token, table, data.filter(r => String(r.id) !== String(id)));
+      return reply({ ok: true });
     }
 
-    return err('Method not allowed', 405);
+    return reply({ error: 'Method not allowed' }, 405);
   } catch (e) {
-    return err(e.message, 500);
+    return reply({ error: e.message }, 500);
   }
 };
