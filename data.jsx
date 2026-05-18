@@ -20,7 +20,7 @@ const apiDel   = (t, id)    => apiFetch(`table=${t}&id=${id}`, { method: 'DELETE
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadAllData() {
-  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files, folders] =
+  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files, folders, cal_tags] =
     await Promise.all([
       apiGet('tasks'), apiGet('contacts'), apiGet('deals'),
       apiGet('fin_income'), apiGet('fin_expenses'), apiGet('goals'),
@@ -28,6 +28,7 @@ async function loadAllData() {
       apiGet('notes').catch(() => []),
       apiGet('files').catch(() => []),
       apiGet('folders').catch(() => []),
+      apiGet('cal_tags').catch(() => []),
     ]);
 
   // Default folders (shown when API returns empty)
@@ -53,6 +54,7 @@ async function loadAllData() {
     NOTES: notes.map(n => ({ ...n, pinned: !!n.pinned, blocks: n.blocks })),
     FILES: files,   // real uploaded files; storage-data.jsx adds demo fallback
     FOLDERS: folders.length > 0 ? folders : DEFAULT_FOLDERS,
+    CAL_TAGS: cal_tags,
     STATUS_LABEL,
   };
 }
@@ -138,6 +140,14 @@ async function updateNote(id, updates) {
 }
 async function deleteNote(id) { await apiDel('notes', id); }
 
+// ── CALENDAR TAGS ─────────────────────────────────────────────────────────────
+async function createCalTag({ name, color }) {
+  const id = 'tag-' + Date.now();
+  await apiPost('cal_tags', { id, name, color: color || '#d4ff4d' });
+  return id;
+}
+async function deleteCalTag(id) { await apiDel('cal_tags', id); }
+
 // ── FILES ──────────────────────────────────────────────────────────────────────
 function detectFileType(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
@@ -200,4 +210,5 @@ Object.assign(window, {
   uploadFileProxy, getDownloadUrl, createFileRecord, updateFileRecord, deleteFileRecord,
   detectFileType, formatFileSize,
   createFolder, updateFolder, deleteFolder,
+  createCalTag, deleteCalTag,
 });

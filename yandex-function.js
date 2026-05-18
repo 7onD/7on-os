@@ -8,7 +8,7 @@ const BUCKET = process.env.BUCKET || '7on-os-data';
 const TABLES = new Set([
   'tasks', 'contacts', 'deals',
   'fin_income', 'fin_expenses', 'goals', 'monthly',
-  'events', 'notes', 'files', 'folders',
+  'events', 'notes', 'files', 'folders', 'cal_tags',
 ]);
 
 const CORS = {

@@ -12,15 +12,30 @@ const CalendarPage = ({ D, refresh }) => {
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
   const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
   const [mobileView, setMobileView]     = React.useState('week'); // 'week' | 'month'
+  const [newTagName, setNewTagName]     = React.useState('');
+  const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
+  const [savingTag, setSavingTag]       = React.useState(false);
+  const [showTagForm, setShowTagForm]   = React.useState(false);
 
   const HOURS      = Array.from({ length: 12 }, (_, i) => 8 + i); // 8-19
   const BASE_MON   = new Date(2026, 4, 18);
   const MONTHS_RU  = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   const MONTHS_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
   const DOW_NAMES  = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  const KIND_LABELS = { work: 'Работа', deal: 'Сделка', meeting: 'Встреча', personal: 'Личное' };
-  const KIND_COLORS = { deal: 'var(--violet)', work: 'var(--accent)', meeting: 'var(--orange)', personal: 'var(--blue)' };
   const cellH = 64;
+
+  // Default tags shown when DB table is empty (ids match legacy 'kind' values)
+  const DEFAULT_TAGS = [
+    { id: 'work',     name: 'Работа',  color: '#d4ff4d' },
+    { id: 'deal',     name: 'Сделка',  color: '#b78cff' },
+    { id: 'meeting',  name: 'Встреча', color: '#ffb45e' },
+    { id: 'personal', name: 'Личное',  color: '#7aa7ff' },
+  ];
+  const TAGS = (D.CAL_TAGS && D.CAL_TAGS.length > 0) ? D.CAL_TAGS : DEFAULT_TAGS;
+  const KIND_LABELS = Object.fromEntries(TAGS.map(t => [t.id, t.name]));
+  const KIND_COLORS = Object.fromEntries(TAGS.map(t => [t.id, t.color]));
+
+  const TAG_PALETTE = ['#d4ff4d','#b78cff','#ffb45e','#7aa7ff','#ff6b7a','#5ee5a0','#4ad7d1','#74c0fc','#ff9a3c','#f06595'];
 
   // Current week days
   const DAYS = Array.from({ length: 7 }, (_, i) => {
@@ -103,12 +118,31 @@ const CalendarPage = ({ D, refresh }) => {
 
   const handleDeleteFromGrid = async (id) => { await deleteEvent(id); await refresh(); };
 
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+    setSavingTag(true);
+    try {
+      await createCalTag({ name: newTagName.trim(), color: newTagColor });
+      await refresh();
+      setNewTagName('');
+      setNewTagColor('#d4ff4d');
+      setShowTagForm(false);
+    } finally { setSavingTag(false); }
+  };
+
+  const handleDeleteTag = async (id) => {
+    if (!confirm('Удалить тег?')) return;
+    await deleteCalTag(id);
+    await refresh();
+  };
+
   const renderEventBlock = (e, opts = {}) => {
+    const color  = KIND_COLORS[e.kind] || '#888888';
     const top    = (e.start - HOURS[0]) * cellH + 4;
     const height = Math.max((e.end - e.start) * cellH - 8, 24);
     return (
-      <div key={e.id} className={`fcal-event ${e.kind}`}
-        style={{ top, height, cursor:'pointer', ...(opts.style || {}) }}
+      <div key={e.id} className="fcal-event"
+        style={{ top, height, cursor:'pointer', background:`${color}22`, borderLeftColor:color, color, ...(opts.style || {}) }}
         onClick={ev => openDetail(ev, e)}>
         <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{e.title}</div>
         <div className="when">{formatTime(e.start)} – {formatTime(e.end)}</div>
@@ -158,15 +192,60 @@ const CalendarPage = ({ D, refresh }) => {
           {D.WORK_TASKS.filter(t => t.due && t.due.includes(':')).length === 0 && <div className="placeholder">Нет задач со временем</div>}
         </div>
         <div className="card" style={{ marginTop:16 }}>
-          <div className="card-header"><div className="card-title">Легенда</div></div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {Object.entries(KIND_LABELS).map(([key, label]) => (
-              <div key={key} style={{ display:'flex', alignItems:'center', gap:10, fontSize:12.5 }}>
-                <div style={{ width:3, height:14, borderRadius:2, background:KIND_COLORS[key] }} />
-                <span>{label}</span>
-                <span className="mono" style={{ marginLeft:'auto', fontSize:10.5, color:'var(--text-faint)' }}>
-                  {D.EVENTS.filter(e => e.kind === key).length}
+          <div className="card-header">
+            <div className="card-title">Теги</div>
+            <button className="icon-btn" style={{ width:24, height:24 }} title="Новый тег"
+              onClick={() => setShowTagForm(s => !s)}>
+              <Icon name="plus" size={12} />
+            </button>
+          </div>
+
+          {/* Add tag form */}
+          {showTagForm && (
+            <div style={{ padding:'10px 0 14px', borderBottom:'1px solid var(--border)', marginBottom:10 }}>
+              <input
+                className="form-input" autoFocus
+                placeholder="Название тега…"
+                value={newTagName}
+                onChange={e => setNewTagName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreateTag()}
+                style={{ width:'100%', fontSize:12.5, marginBottom:10, boxSizing:'border-box' }}
+              />
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:10 }}>
+                {TAG_PALETTE.map(c => (
+                  <button key={c} onClick={() => setNewTagColor(c)}
+                    style={{ width:22, height:22, borderRadius:'50%', background:c, border:'none', cursor:'pointer',
+                      outline: newTagColor === c ? `2px solid ${c}` : '2px solid transparent',
+                      outlineOffset:2, boxSizing:'border-box' }} />
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:6 }}>
+                <button className="btn ghost" style={{ flex:1, justifyContent:'center' }}
+                  onClick={() => { setShowTagForm(false); setNewTagName(''); }}>Отмена</button>
+                <button className="btn primary" style={{ flex:1, justifyContent:'center' }}
+                  onClick={handleCreateTag} disabled={savingTag || !newTagName.trim()}>
+                  {savingTag ? '…' : 'Создать'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+            {TAGS.map(tag => (
+              <div key={tag.id} style={{ display:'flex', alignItems:'center', gap:9, padding:'5px 0',
+                borderRadius:6, fontSize:12.5 }}>
+                <div style={{ width:10, height:10, borderRadius:3, background:tag.color, flexShrink:0 }} />
+                <span style={{ flex:1 }}>{tag.name}</span>
+                <span className="mono" style={{ fontSize:10.5, color:'var(--text-faint)', marginRight:4 }}>
+                  {D.EVENTS.filter(e => e.kind === tag.id).length}
                 </span>
+                {/* Only allow deleting user-created tags (not the 4 defaults) */}
+                {!['work','deal','meeting','personal'].includes(tag.id) && (
+                  <button className="icon-btn" style={{ width:20, height:20, opacity:0.4, flexShrink:0 }}
+                    title="Удалить тег" onClick={() => handleDeleteTag(tag.id)}>
+                    <Icon name="trash" size={10} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -279,8 +358,8 @@ const CalendarPage = ({ D, refresh }) => {
                 {evs.slice(0, 3).map(e => (
                   <div key={e.id} style={{
                     fontSize:10.5, padding:'2px 5px', borderRadius:4, marginBottom:2,
-                    background: `${KIND_COLORS[e.kind]}22`,
-                    color: KIND_COLORS[e.kind], fontWeight:500,
+                    background: `${KIND_COLORS[e.kind] || '#888'}22`,
+                    color: KIND_COLORS[e.kind] || '#888', fontWeight:500,
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
                   }} onClick={ev => { ev.stopPropagation(); openDetail(ev, e); }}>{e.title}</div>
                 ))}
@@ -367,8 +446,11 @@ const CalendarPage = ({ D, refresh }) => {
                       {formatTime(e.start)} – {formatTime(e.end)}
                     </div>
                   </div>
-                  <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'meeting' ? 'warm' : 'cold'}`}>
-                    {KIND_LABELS[e.kind]}
+                  <span style={{ fontSize:10.5, padding:'3px 8px', borderRadius:5, flexShrink:0,
+                    background:`${KIND_COLORS[e.kind] || '#888'}22`,
+                    color: KIND_COLORS[e.kind] || 'var(--text-faint)',
+                    fontFamily:'var(--font-mono)', fontWeight:500 }}>
+                    {KIND_LABELS[e.kind] || e.kind}
                   </span>
                 </div>
               ))
@@ -391,10 +473,9 @@ const CalendarPage = ({ D, refresh }) => {
             <Field label="День">
               <FSelect value={form.day} onChange={e => set('day', e.target.value)}>{daySelect()}</FSelect>
             </Field>
-            <Field label="Тип">
+            <Field label="Тег">
               <FSelect value={form.kind} onChange={e => set('kind', e.target.value)}>
-                <option value="work">Работа</option><option value="deal">Сделка</option>
-                <option value="meeting">Встреча</option><option value="personal">Личное</option>
+                {TAGS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </FSelect>
             </Field>
           </div>
@@ -418,7 +499,7 @@ const CalendarPage = ({ D, refresh }) => {
         <div className="modal-backdrop" onClick={() => setDetailEvent(null)}>
           <div className="task-detail-panel" onClick={e => e.stopPropagation()}>
             <div className="task-detail-header">
-              <div style={{ width:12, height:12, borderRadius:'50%', background:KIND_COLORS[detailForm.kind], flexShrink:0, marginTop:2 }} />
+              <div style={{ width:12, height:12, borderRadius:'50%', background:KIND_COLORS[detailForm.kind] || '#888', flexShrink:0, marginTop:2 }} />
               <input className="task-detail-title" value={detailForm.title} onChange={e => setDE('title', e.target.value)} placeholder="Название события" />
               <button className="icon-btn" onClick={() => setDetailEvent(null)}><Icon name="x" size={14} /></button>
             </div>
@@ -440,12 +521,12 @@ const CalendarPage = ({ D, refresh }) => {
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Тип</span>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                    {Object.entries(KIND_LABELS).map(([k, label]) => (
-                      <button key={k} onClick={() => setDE('kind', k)}
+                    {TAGS.map(tag => (
+                      <button key={tag.id} onClick={() => setDE('kind', tag.id)}
                         style={{ padding:'4px 10px', borderRadius:6, fontSize:11.5, border:'1px solid', cursor:'pointer',
-                          borderColor: detailForm.kind === k ? KIND_COLORS[k] : 'var(--border)',
-                          background: detailForm.kind === k ? `${KIND_COLORS[k]}22` : 'transparent',
-                          color: detailForm.kind === k ? KIND_COLORS[k] : 'var(--text-dim)' }}>{label}</button>
+                          borderColor: detailForm.kind === tag.id ? tag.color : 'var(--border)',
+                          background: detailForm.kind === tag.id ? `${tag.color}22` : 'transparent',
+                          color: detailForm.kind === tag.id ? tag.color : 'var(--text-dim)' }}>{tag.name}</button>
                     ))}
                   </div>
                 </div>
