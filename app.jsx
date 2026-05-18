@@ -4,9 +4,19 @@ const { useState, useEffect, useCallback, useRef } = React;
 const _API_URL = 'https://functions.yandexcloud.net/d4eck1v8o203hh4lr9ov';
 
 const LockScreen = ({ onUnlock }) => {
-  const [pwd, setPwd]         = React.useState('');
-  const [err, setErr]         = React.useState(false);
+  const [pwd, setPwd]           = React.useState('');
+  const [err, setErr]           = React.useState(false);
   const [checking, setChecking] = React.useState(false);
+  const [quickFiles, setQuickFiles] = React.useState([]);
+
+  React.useEffect(() => {
+    fetch(`${_API_URL}?table=files`)
+      .then(r => r.json())
+      .then(files => {
+        if (Array.isArray(files)) setQuickFiles(files.filter(f => f.quick_access));
+      })
+      .catch(() => {});
+  }, []);
 
   const tryUnlock = async () => {
     if (!pwd || checking) return;
@@ -33,7 +43,7 @@ const LockScreen = ({ onUnlock }) => {
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:24, background:'var(--bg)' }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:24, background:'var(--bg)', position:'relative', overflow:'hidden' }}>
       <div style={{ width:52, height:52, borderRadius:14, background:'var(--accent)', color:'#0a0a0a', display:'grid', placeItems:'center', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:26, letterSpacing:'-0.04em' }}>7</div>
       <div style={{ textAlign:'center' }}>
         <div style={{ fontFamily:'var(--font-mono)', fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:4 }}>7on OS</div>
@@ -66,6 +76,28 @@ const LockScreen = ({ onUnlock }) => {
           {checking ? 'Проверка…' : 'Войти'}
         </button>
       </div>
+      {quickFiles.length > 0 && (
+        <div style={{ position:'absolute', bottom:28, left:'50%', transform:'translateX(-50%)', width:'min(480px, 90vw)' }}>
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:10.5, color:'var(--text-faint)', marginBottom:10, textAlign:'center', letterSpacing:'0.04em', textTransform:'uppercase' }}>
+            Быстрый доступ
+          </div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+            {quickFiles.map(f => (
+              <a key={f.id}
+                href={f.key ? `${_API_URL}?action=download&key=${encodeURIComponent(f.key)}` : '#'}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10,
+                  background:'var(--surface)', border:'1px solid var(--border)',
+                  textDecoration:'none', color:'var(--text)', maxWidth:200, minWidth:0 }}>
+                <span style={{ fontSize:16, flexShrink:0 }}>
+                  {f.type === 'pdf' ? '📄' : f.type === 'image' ? '🖼' : f.type === 'doc' ? '📝' : f.type === 'sheet' ? '📊' : '📁'}
+                </span>
+                <span style={{ fontFamily:'var(--font-mono)', fontSize:11.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.name}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -29,6 +29,8 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const [newFolderIcon, setNewFolderIcon] = React.useState('folder');
   const [newFolderColor, setNewFolderColor] = React.useState('#7aa7ff');
   const [savingFolder, setSavingFolder] = React.useState(false);
+  const [showMoveNote, setShowMoveNote] = React.useState(false);
+  const [moveNoteFolderId, setMoveNoteFolderId] = React.useState('');
   const newlineRef   = React.useRef(null);
   const fileInputRef = React.useRef(null);
   const fileMenuRef  = React.useRef(null);
@@ -223,6 +225,19 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
       setNewFolderIcon('folder');
       setNewFolderColor('#7aa7ff');
     } finally { setSavingFolder(false); }
+  };
+
+  const handleMoveNote = async () => {
+    if (!cur || !moveNoteFolderId) return;
+    await updateNote(cur.id, { folder: moveNoteFolderId, modified: nowStr() });
+    await refresh();
+    setShowMoveNote(false);
+  };
+
+  const handleToggleQuickAccess = async (file) => {
+    setFileMenuPos(null);
+    await updateFileRecord(file.id, { quick_access: file.quick_access ? 0 : 1 });
+    await refresh();
   };
 
   const openRename = (file) => {
@@ -447,6 +462,10 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
               title={cur.pinned?'Открепить':'Закрепить'}>
               <Icon name="pin" size={14} />
             </button>
+            <button className="editor-tool" onClick={() => { setMoveNoteFolderId(cur.folder || 'f-personal'); setShowMoveNote(true); }}
+              title="Переместить в папку">
+              <Icon name="folder" size={14} />
+            </button>
             <div className="grow" />
             <div className="editor-meta">
               <span>{cur.modified}</span><span>·</span><span>{curBlocks.length} блоков</span>
@@ -555,6 +574,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
                     <Icon name={fileIconName(f.type)} size={32} stroke={1.2} style={{ position:'relative', zIndex:1 }} />
                     <span className="badge">{fileTypeLabel(f.type)}</span>
                     {f.demo && <span className="badge" style={{ right:'auto', left:8, background:'rgba(255,180,94,0.15)', color:'var(--orange)', borderColor:'rgba(255,180,94,0.25)' }}>demo</span>}
+                    {!!f.quick_access && <span className="badge" style={{ right:'auto', left: f.demo ? 52 : 8, background:'rgba(212,255,77,0.12)', color:'var(--accent)', borderColor:'rgba(212,255,77,0.25)' }}>★</span>}
                   </div>
                   <div className="file-meta" style={{ display:'flex', alignItems:'center', gap:4 }}>
                     <div style={{ flex:1, minWidth:0 }}>
@@ -584,7 +604,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
                   <div className="name-cell">
                     <span className={`ic ${f.type}`}><Icon name={fileIconName(f.type)} size={15} /></span>
                     <div style={{ minWidth:0 }}>
-                      <div className="name">{f.name}</div>
+                      <div className="name">{f.name}{!!f.quick_access && <span style={{ marginLeft:5, color:'var(--accent)', fontSize:11 }}>★</span>}</div>
                       <div className="sub">{FOLDERS.find(fo=>fo.id===f.folder)?.name}{f.demo && ' · demo'}</div>
                     </div>
                   </div>
@@ -609,6 +629,26 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
 
   return (
     <div className="storage" data-mobile-screen={mobileScreen}>
+      {/* Move note to folder modal */}
+      {showMoveNote && cur && (
+        <Modal title="Переместить заметку"
+          onClose={() => setShowMoveNote(false)}
+          onConfirm={handleMoveNote}
+          confirmLabel="Переместить"
+          confirmDisabled={!moveNoteFolderId || moveNoteFolderId === cur.folder}>
+          <Field label="Папка">
+            <FSelect value={moveNoteFolderId} onChange={e => setMoveNoteFolderId(e.target.value)}>
+              {FOLDERS.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </FSelect>
+          </Field>
+          <div style={{ fontSize:12, color:'var(--text-faint)', marginTop:8, fontFamily:'var(--font-mono)' }}>
+            Сейчас: {FOLDERS.find(f => f.id === cur.folder)?.name || 'Личное'}
+          </div>
+        </Modal>
+      )}
+
       {/* Create folder modal */}
       {showNewFolder && (
         <Modal title="Новая папка"
@@ -667,6 +707,11 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
             <div className="file-dropdown" style={{ position:'static' }}>
               <button className="file-dropdown-item" onClick={() => openRename(f)}>
                 <Icon name="edit" size={13} /> Переименовать
+              </button>
+              <button className="file-dropdown-item" onClick={() => handleToggleQuickAccess(f)}
+                style={{ color: f.quick_access ? 'var(--accent)' : undefined }}>
+                <span style={{ fontSize:13, lineHeight:1 }}>{f.quick_access ? '★' : '☆'}</span>
+                {f.quick_access ? 'Убрать из быстрого доступа' : 'Быстрый доступ'}
               </button>
               {!f.demo && (
                 <button className="file-dropdown-item danger" onClick={() => handleDeleteFile(f)}>
