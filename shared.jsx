@@ -155,4 +155,167 @@ const StatusTag = ({ status }) => {
   return <span className={`tag ${cls}`}>{(window.STATUS_LABEL || {})[status] || status}</span>;
 };
 
-Object.assign(window, { TaskRow, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea });
+// ── Link helpers ──────────────────────────────────────────────────────────────
+function extractLinks(text) {
+  if (!text) return [];
+  const re = /\[\[(file|note):([^:]+):([^\]]+)\]\]/g;
+  const links = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    links.push({ type: m[1], id: m[2], name: m[3] });
+  }
+  return links;
+}
+
+function stripLinks(text) {
+  return (text || '').replace(/\[\[(file|note):[^\]]+\]\]/g, '').trim();
+}
+
+// ── SlashLinkMenu (for tasks + events descriptions) ──────────────────────────
+const SlashLinkMenu = ({ query, position, onPick, onClose }) => {
+  const files = (window.SEVEN_DATA && window.SEVEN_DATA.FILES) || [];
+  const notes = (window.SEVEN_DATA && window.SEVEN_DATA.NOTES) || [];
+  const q = (query || '').toLowerCase();
+
+  const filteredFiles = useMemo(() => {
+    return (q ? files.filter(f => f.name.toLowerCase().includes(q)) : files).slice(0, 4);
+  }, [q]);
+  const filteredNotes = useMemo(() => {
+    return (q ? notes.filter(n => n.title.toLowerCase().includes(q)) : notes).slice(0, 3);
+  }, [q]);
+
+  const allItems = [
+    ...filteredFiles.map(f => ({ type: 'file', item: f })),
+    ...filteredNotes.map(n => ({ type: 'note', item: n })),
+  ];
+
+  const [active, setActive] = useState(0);
+  useEffect(() => { setActive(0); }, [query]);
+  useEffect(() => {
+    const onKey = e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(allItems.length - 1, a + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(0, a - 1)); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (allItems[active]) onPick(allItems[active]); }
+      else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [allItems, active]);
+
+  if (allItems.length === 0) return null;
+
+  const fmtD = (t) => typeof fmtDate !== 'undefined' ? fmtDate(t) : t;
+  let gi = 0;
+
+  return (
+    <div className="slash-menu" style={{ ...position, position:'absolute', zIndex:300, minWidth:280 }}>
+      {filteredFiles.length > 0 && <div className="slash-section">Файлы</div>}
+      {filteredFiles.map(f => {
+        const idx = gi++;
+        return (
+          <button key={f.id} className="slash-item" data-active={idx===active?'1':'0'}
+            onClick={() => onPick({ type:'file', item:f })} onMouseEnter={() => setActive(idx)}>
+            <span className={`ic ${f.type}`} style={{ width:28, height:28, display:'grid', placeItems:'center', borderRadius:6, background:'var(--surface-3)', flexShrink:0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            </span>
+            <span className="label">
+              <span className="name">{f.name}</span>
+              <span className="desc" style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--text-faint)' }}>{f.size} · {fmtD(f.modified)}</span>
+            </span>
+            {idx===active && <span className="kbd">↵</span>}
+          </button>
+        );
+      })}
+      {filteredNotes.length > 0 && <div className="slash-section">Заметки</div>}
+      {filteredNotes.map(n => {
+        const idx = gi++;
+        return (
+          <button key={n.id} className="slash-item" data-active={idx===active?'1':'0'}
+            onClick={() => onPick({ type:'note', item:n })} onMouseEnter={() => setActive(idx)}>
+            <span className="ic" style={{ width:28, height:28, display:'grid', placeItems:'center', borderRadius:6, background:'rgba(212,255,77,0.1)', color:'var(--accent)', flexShrink:0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+            </span>
+            <span className="label">
+              <span className="name">{n.title}</span>
+              {n.preview && <span className="desc" style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--text-faint)' }}>{n.preview.slice(0,50)}</span>}
+            </span>
+            {idx===active && <span className="kbd">↵</span>}
+          </button>
+        );
+      })}
+      <div style={{ borderTop:'1px solid var(--border)', padding:'5px 10px', fontFamily:'var(--font-mono)', fontSize:9.5, color:'var(--text-faint)', display:'flex', justifyContent:'space-between' }}>
+        <span>↑↓</span><span>↵ вставить · Esc отмена</span>
+      </div>
+    </div>
+  );
+};
+
+// ── DescriptionWithLinks (textarea + slash menu + link chips) ────────────────
+const DescriptionWithLinks = ({ value, onChange, placeholder, style, minHeight = 100 }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuQuery, setMenuQuery] = useState('');
+  const [slashStart, setSlashStart] = useState(-1);
+  const taRef = React.useRef(null);
+
+  const handleChange = e => {
+    onChange(e);
+    const val = e.target.value;
+    const cursor = e.target.selectionStart;
+    const before = val.slice(0, cursor);
+    const m = before.match(/\/(\S*)$/);
+    if (m) {
+      setMenuQuery(m[1]);
+      setSlashStart(cursor - m[0].length);
+      setShowMenu(true);
+    } else {
+      setShowMenu(false);
+      setSlashStart(-1);
+    }
+  };
+
+  const handlePick = ({ type, item }) => {
+    const cursor = taRef.current ? taRef.current.selectionStart : (slashStart + 1 + menuQuery.length);
+    const before = value.slice(0, slashStart);
+    const after = value.slice(cursor);
+    const link = type === 'file'
+      ? `[[file:${item.id}:${item.name}]]`
+      : `[[note:${item.id}:${item.title}]]`;
+    onChange({ target: { value: before + link + ' ' + after } });
+    setShowMenu(false);
+    setSlashStart(-1);
+    setTimeout(() => taRef.current?.focus(), 10);
+  };
+
+  const links = extractLinks(value);
+
+  const openLink = ({ type, id }) => {
+    if (window.SEVEN_NAV) window.SEVEN_NAV('storage', { kind: type, id });
+  };
+
+  return (
+    <div style={{ position:'relative' }}>
+      <textarea ref={taRef} className="form-textarea"
+        value={value} onChange={handleChange} placeholder={placeholder}
+        style={{ ...style, minHeight }}
+        onKeyDown={e => { if (e.key === 'Escape') setShowMenu(false); }}
+      />
+      {showMenu && (
+        <SlashLinkMenu query={menuQuery} position={{ bottom:'100%', left:0, marginBottom:4 }}
+          onPick={handlePick} onClose={() => setShowMenu(false)} />
+      )}
+      {links.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
+          {links.map((l, i) => (
+            <button key={i} className="desc-link-chip" onClick={() => openLink(l)} title={`Открыть в хранилище: ${l.name}`}>
+              <span style={{ opacity:0.7 }}>{l.type === 'file' ? '📎' : '📝'}</span>
+              {l.name.length > 30 ? l.name.slice(0, 30) + '…' : l.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+Object.assign(window, { TaskRow, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea,
+  SlashLinkMenu, DescriptionWithLinks, extractLinks, stripLinks });

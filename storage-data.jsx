@@ -21,6 +21,35 @@ const STORAGE_FILES = [
   { id: 'file-12', name: 'Чек-лист показа.md',                 type: 'md',    size: '8 КБ',    folder: 'f-docs',     modified: '1 мая'  },
 ];
 
+function parseFileSize(str) {
+  if (!str) return 0;
+  const m = str.replace(/\s/g, '').match(/([\d.]+)(КБ|МБ|ГБ)/i);
+  if (!m) return 0;
+  const v = parseFloat(m[1]);
+  if (m[2] === 'КБ') return v * 1024;
+  if (m[2] === 'МБ') return v * 1024 * 1024;
+  if (m[2] === 'ГБ') return v * 1024 * 1024 * 1024;
+  return v;
+}
+
+function calcStorageUsed() {
+  const files = (window.SEVEN_DATA && window.SEVEN_DATA.FILES) || STORAGE_FILES;
+  const bytes = files.reduce((s, f) => s + parseFileSize(f.size), 0);
+  const mb = bytes / (1024 * 1024);
+  const capMb = 1024; // 1 ГБ
+  return {
+    usedMb: Math.round(mb * 10) / 10,
+    capMb,
+    usedDisplay: mb >= 1024
+      ? `${(mb / 1024).toFixed(2)} ГБ`
+      : `${mb.toFixed(1)} МБ`,
+    capDisplay: '1 ГБ',
+    pct: Math.min(100, (mb / capMb) * 100),
+  };
+}
+
+window.calcStorageUsed = calcStorageUsed;
+
 // Attach static data to global SEVEN_DATA (available after data.jsx loads)
 window.SEVEN_DATA.FOLDERS = STORAGE_FOLDERS;
 window.SEVEN_DATA.FILES   = STORAGE_FILES;

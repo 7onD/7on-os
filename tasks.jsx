@@ -158,7 +158,9 @@ const TasksPage = ({ D, refresh }) => {
               <Field label="Метка"><FInput placeholder="Показ, Звонки…" value={form.tag} onChange={e => set('tag', e.target.value)} /></Field>
             )}
           </div>
-          <Field label="Заметки"><FTextarea placeholder="Дополнительная информация…" value={form.description} onChange={e => set('description', e.target.value)} /></Field>
+          <Field label="Заметки">
+            <DescriptionWithLinks placeholder="Дополнительная информация… (/ для ссылки на файл или заметку)" value={form.description} onChange={e => set('description', e.target.value)} />
+          </Field>
         </Modal>
       )}
 
@@ -208,10 +210,13 @@ const TasksPage = ({ D, refresh }) => {
 
               <div style={{ marginTop:18 }}>
                 <div className="stat-label" style={{ marginBottom:8 }}>Заметки</div>
-                <textarea className="form-textarea" style={{ minHeight:120, fontSize:13, lineHeight:1.6 }}
+                <DescriptionWithLinks
                   value={detailForm.description}
                   onChange={e => setD('description', e.target.value)}
-                  placeholder="Дополнительная информация, ссылки, контакты…" />
+                  placeholder="Дополнительная информация… (/ для ссылки на файл или заметку)"
+                  style={{ fontSize:13, lineHeight:1.6 }}
+                  minHeight={120}
+                />
               </div>
             </div>
 

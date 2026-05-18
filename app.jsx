@@ -6,7 +6,7 @@ const LockScreen = ({ onUnlock }) => {
   const [err, setErr] = React.useState(false);
 
   const tryUnlock = () => {
-    if (pwd === '7ond') {
+    if (pwd === '0510') {
       sessionStorage.setItem('7on_auth', '1');
       onUnlock();
     } else {
@@ -26,6 +26,9 @@ const LockScreen = ({ onUnlock }) => {
       <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
         <input
           type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="current-password"
           placeholder="••••••"
           value={pwd}
           onChange={e => { setPwd(e.target.value); setErr(false); }}
@@ -180,8 +183,17 @@ const App = () => {
   const [offline, setOffline] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [query, setQuery] = useState('');
+  const [storageTarget, setStorageTarget] = useState(null);
   const searchRef = useRef(null);
   const userName = 'Семён Дементьев';
+
+  useEffect(() => {
+    window.SEVEN_NAV = (route, target) => {
+      setRoute(route);
+      if (target) setStorageTarget(target);
+    };
+    return () => { window.SEVEN_NAV = null; };
+  }, []);
 
   const refresh = useCallback(async () => {
     await loadAllData();
@@ -306,7 +318,7 @@ const App = () => {
           {route === 'calendar'  && <CalendarPage D={D} refresh={refresh} />}
           {route === 'finance'   && <FinancePage D={D} refresh={refresh} />}
           {route === 'contacts'  && <ContactsPage D={D} refresh={refresh} />}
-          {route === 'storage'   && <StoragePage  D={D} refresh={refresh} />}
+          {route === 'storage'   && <StoragePage  D={D} refresh={refresh} navTarget={storageTarget} onNavConsumed={() => setStorageTarget(null)} />}
         </div>
       </div>
 

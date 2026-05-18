@@ -132,7 +132,9 @@ const CalendarPage = ({ D, refresh }) => {
             <Field label="Начало (час)"><FInput type="number" min="9" max="19" value={form.start} onChange={e => set('start', e.target.value)} /></Field>
             <Field label="Конец (час)"><FInput type="number" min="9" max="20" value={form.end} onChange={e => set('end', e.target.value)} /></Field>
           </div>
-          <Field label="Описание"><FTextarea placeholder="Адрес, контакты, детали…" value={form.description} onChange={e => set('description', e.target.value)} /></Field>
+          <Field label="Описание">
+            <DescriptionWithLinks placeholder="Адрес, контакты, детали… (/ для ссылки на файл или заметку)" value={form.description} onChange={e => set('description', e.target.value)} />
+          </Field>
         </Modal>
       )}
 
@@ -183,10 +185,13 @@ const CalendarPage = ({ D, refresh }) => {
 
               <div style={{ marginTop:18 }}>
                 <div className="stat-label" style={{ marginBottom:8 }}>Описание</div>
-                <textarea className="form-textarea" style={{ minHeight:100, fontSize:13, lineHeight:1.6 }}
+                <DescriptionWithLinks
                   value={detailForm.description}
                   onChange={e => setDE('description', e.target.value)}
-                  placeholder="Адрес, контакты, детали встречи…" />
+                  placeholder="Адрес, контакты, детали встречи… (/ для ссылки на файл или заметку)"
+                  style={{ fontSize:13, lineHeight:1.6 }}
+                  minHeight={100}
+                />
               </div>
             </div>
 
