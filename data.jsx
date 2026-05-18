@@ -1,5 +1,5 @@
-// 7on OS — Cloudflare D1 data layer
-const API = 'https://7on-os.sd05102005.workers.dev/api';
+// 7on OS — Yandex Cloud data layer
+const API = 'https://functions.yandexcloud.net/d4eck1v8o203hh4lr9ov/api';
 
 const STATUS_LABEL = { hot: 'Горячий', warm: 'Тёплый', work: 'В работе', cold: 'Холодный' };
 
