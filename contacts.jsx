@@ -153,13 +153,13 @@ const ContactsPage = ({ D, refresh }) => {
                   <div className="contact-addr params">{c.params}</div>
                 </div>
                 <div className="contact-col-hide">
-                  <div className="contact-date">{c.lastContact}</div>
+                  <div className="contact-date">{fmtDate(c.lastContact)}</div>
                   <div className="mono" style={{ fontSize:10.5, color: c.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)' }}>
                     {c.daysSince === 0 ? 'сегодня' : `${c.daysSince} дн. назад`}
                   </div>
                 </div>
                 <div className="contact-col-hide"><StatusTag status={c.status} /></div>
-                <div className="contact-col-hide contact-next">{c.next}<span className="when">{c.nextWhen}</span></div>
+                <div className="contact-col-hide contact-next">{c.next}<span className="when">{fmtDate(c.nextWhen)}</span></div>
                 <div style={{ color:'var(--text-faint)' }}>
                   <button className="icon-btn" style={{ width:28, height:28 }}
                     onClick={e => { e.stopPropagation(); handleDelete(c.id); }}>
@@ -211,7 +211,7 @@ const ContactsPage = ({ D, refresh }) => {
             <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginTop:14 }}>
               <div style={{ display:'flex', justifyContent:'space-between' }}>
                 <div className="stat-label">Последний контакт</div>
-                <div className="mono" style={{ fontSize:11, color:'var(--text-dim)' }}>{cur.lastContact}</div>
+                <div className="mono" style={{ fontSize:11, color:'var(--text-dim)' }}>{fmtDate(cur.lastContact)}</div>
               </div>
               <div className="mono" style={{ fontSize:10.5, color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)', marginTop:2 }}>
                 {cur.daysSince} {cur.daysSince === 1 ? 'день' : 'дн.'} назад
@@ -231,7 +231,7 @@ const ContactsPage = ({ D, refresh }) => {
                 <div style={{ width:3, height:28, borderRadius:2, background:'var(--accent)', flexShrink:0 }} />
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12.5 }}>{cur.next}</div>
-                  <div className="mono" style={{ fontSize:10.5, color:'var(--accent)' }}>{cur.nextWhen}</div>
+                  <div className="mono" style={{ fontSize:10.5, color:'var(--accent)' }}>{fmtDate(cur.nextWhen)}</div>
                 </div>
               </div>
             </div>

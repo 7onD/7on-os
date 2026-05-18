@@ -1,5 +1,115 @@
 // 7on OS — main app
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
+
+const LockScreen = ({ onUnlock }) => {
+  const [pwd, setPwd] = React.useState('');
+  const [err, setErr] = React.useState(false);
+
+  const tryUnlock = () => {
+    if (pwd === '7ond') {
+      sessionStorage.setItem('7on_auth', '1');
+      onUnlock();
+    } else {
+      setErr(true);
+      setPwd('');
+      setTimeout(() => setErr(false), 1500);
+    }
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:24, background:'var(--bg)' }}>
+      <div style={{ width:52, height:52, borderRadius:14, background:'var(--accent)', color:'#0a0a0a', display:'grid', placeItems:'center', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:26, letterSpacing:'-0.04em' }}>7</div>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:4 }}>7on OS</div>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-faint)' }}>Введите пароль для входа</div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+        <input
+          type="password"
+          placeholder="••••••"
+          value={pwd}
+          onChange={e => { setPwd(e.target.value); setErr(false); }}
+          onKeyDown={e => e.key === 'Enter' && tryUnlock()}
+          autoFocus
+          style={{
+            background: err ? 'rgba(255,107,122,0.08)' : 'var(--surface)',
+            border: `1px solid ${err ? 'var(--red)' : 'var(--border-strong)'}`,
+            borderRadius: 10, padding: '11px 18px', color: 'var(--text)',
+            fontFamily: 'var(--font-mono)', fontSize: 18, outline: 'none', width: 220,
+            textAlign: 'center', letterSpacing: '0.25em', transition: 'border-color 0.2s',
+          }}
+        />
+        {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--red)' }}>Неверный пароль</div>}
+        <button
+          onClick={tryUnlock}
+          style={{ padding:'10px 40px', borderRadius:10, background:'var(--accent)', border:0, color:'#0a0a0a', fontFamily:'var(--font-mono)', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:4 }}>
+          Войти
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const SearchOverlay = ({ query, D, setRoute, onClose }) => {
+  const q = query.toLowerCase().trim();
+  if (!q) return null;
+
+  const tasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || [])
+    .filter(t => t.title.toLowerCase().includes(q)).slice(0, 5);
+  const contacts = D.CONTACTS
+    .filter(c => c.name.toLowerCase().includes(q) || (c.addr || '').toLowerCase().includes(q)).slice(0, 4);
+  const events = D.EVENTS
+    .filter(e => e.title.toLowerCase().includes(q)).slice(0, 4);
+
+  const total = tasks.length + contacts.length + events.length;
+  const go = (route) => { setRoute(route); onClose(); };
+
+  return (
+    <div className="search-overlay">
+      {total === 0 ? (
+        <div style={{ padding:'14px 18px', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:12 }}>
+          Ничего не найдено по «{query}»
+        </div>
+      ) : (
+        <>
+          {tasks.length > 0 && (
+            <>
+              <div className="search-group-label">Задачи</div>
+              {tasks.map(t => (
+                <button key={t.id} className="search-result" onClick={() => go('tasks')}>
+                  <span className={`task-priority ${t.priority}`} style={{ flexShrink:0, alignSelf:'center' }} />
+                  <span className="search-result-title">{t.title}</span>
+                  {t.due && <span className="search-result-meta">{fmtDate(t.due)}</span>}
+                </button>
+              ))}
+            </>
+          )}
+          {contacts.length > 0 && (
+            <>
+              <div className="search-group-label">Контакты</div>
+              {contacts.map(c => (
+                <button key={c.id} className="search-result" onClick={() => go('contacts')}>
+                  <span className="search-result-title">{c.name}</span>
+                  {c.addr && <span className="search-result-meta">{c.addr}</span>}
+                </button>
+              ))}
+            </>
+          )}
+          {events.length > 0 && (
+            <>
+              <div className="search-group-label">События</div>
+              {events.map(e => (
+                <button key={e.id} className="search-result" onClick={() => go('calendar')}>
+                  <span className="search-result-title">{e.title}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "accent": "#d4ff4d",
@@ -61,12 +171,15 @@ const MobileNav = ({ route, setRoute }) => {
 };
 
 const App = () => {
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('7on_auth') === '1');
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [route, setRoute] = useState('dashboard');
   const [D, setD] = useState(null);
   const [error, setError] = useState(null);
   const [offline, setOffline] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef(null);
   const userName = 'Семён Дементьев';
 
   const refresh = useCallback(async () => {
@@ -96,6 +209,16 @@ const App = () => {
     root.style.setProperty('--font-ui', `'${t.font}', ui-sans-serif, system-ui, sans-serif`);
   }, [t]);
 
+  useEffect(() => {
+    const handler = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) setQuery('');
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  if (!unlocked) return <LockScreen onUnlock={() => setUnlocked(true)} />;
+
   if (error) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', fontFamily:'var(--font-mono)', color:'var(--red)', fontSize:13 }}>
       Ошибка: {error}
@@ -104,7 +227,7 @@ const App = () => {
   if (!D) return <LoadingScreen />;
 
   const counts = {
-    tasks: D.PERSONAL_TASKS.concat(D.WORK_TASKS).filter(x => !x.done).length,
+    tasks: D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || []).filter(x => !x.done).length,
     contacts: D.CONTACTS.length,
   };
 
@@ -117,7 +240,7 @@ const App = () => {
   };
   const PAGE_SUBTITLE = {
     dashboard: 'Добрый день, Семён · понедельник, 18 мая 2026',
-    tasks: 'Личные и рабочие — рядом',
+    tasks: 'Личные, рабочие и учебные',
     calendar: 'Неделя 21 · события из задач со временем',
     finance: 'Доход, расходы, сделки и цели',
     contacts: 'Собственники объектов · CRM',
@@ -141,15 +264,23 @@ const App = () => {
             <h1>{PAGE_LABEL[route]}</h1>
             <div className="meta">
               <span><span className="dot" style={{ background: offline ? 'var(--orange)' : undefined }} />{offline ? 'оффлайн' : 'онлайн'}</span>
-              <span className="sep">·</span>
-              <span>{PAGE_SUBTITLE[route]}</span>
+              <span className="sep topbar-subtitle-sep">·</span>
+              <span className="topbar-subtitle">{PAGE_SUBTITLE[route]}</span>
             </div>
           </div>
           <div className="topbar-spacer" />
-          <div className="search">
-            <Icon name="search" size={14} />
-            <input placeholder="Поиск задач, контактов, событий…" />
-            <span className="kbd">⌘K</span>
+          <div className="search-wrap" ref={searchRef}>
+            <div className="search">
+              <Icon name="search" size={14} />
+              <input
+                placeholder="Поиск задач, контактов, событий…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Escape' && setQuery('')}
+              />
+              {!query && <span className="kbd">⌘K</span>}
+            </div>
+            {query && <SearchOverlay query={query} D={D} setRoute={setRoute} onClose={() => setQuery('')} />}
           </div>
           <div className="topbar-stats">
             <div className="topbar-stat">

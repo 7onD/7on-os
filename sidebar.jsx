@@ -11,9 +11,11 @@ const Sidebar = ({ route, setRoute, counts, userName }) => {
   return (
     <aside className="sidebar">
       <div className="logo">
-        <div className="logo-mark">7</div>
+        <div className="logo-avatar">
+          <img src="photo.jpg" alt={userName} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+            onError={e => { e.target.style.display='none'; e.target.parentNode.textContent=initials; }} />
+        </div>
         <div className="logo-name">7on<span> OS</span></div>
-        <div className="logo-ver">v0.7</div>
       </div>
 
       <div className="nav-group-label">Workspace</div>
@@ -30,35 +32,12 @@ const Sidebar = ({ route, setRoute, counts, userName }) => {
         </button>
       ))}
 
-      <div className="nav-group-label">Pinned</div>
-      <button className="nav-item">
-        <span className="nav-icon"><Icon name="flame" /></span>
-        <span>Горячие лиды</span>
-        <span className="nav-count">3</span>
-      </button>
-      <button className="nav-item">
-        <span className="nav-icon"><Icon name="briefcase" /></span>
-        <span>Активные сделки</span>
-        <span className="nav-count">3</span>
-      </button>
-
       <div className="sidebar-spacer" />
 
       <button className="nav-item">
         <span className="nav-icon"><Icon name="settings" /></span>
         <span>Настройки</span>
       </button>
-
-      <div className="user-card">
-        <div className="avatar" style={{ overflow:'hidden', padding:0 }}>
-          <img src="photo.jpg" alt={userName} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-            onError={e => { e.target.style.display='none'; e.target.parentNode.textContent=initials; }} />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div className="user-name">{userName}</div>
-          <div className="user-role">риэлтор</div>
-        </div>
-      </div>
     </aside>
   );
 };

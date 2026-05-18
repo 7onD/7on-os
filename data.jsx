@@ -31,6 +31,7 @@ async function loadAllData() {
   window.SEVEN_DATA = {
     PERSONAL_TASKS: tasks.filter(t => t.type === 'personal').map(t => ({ ...t, done: !!t.done })),
     WORK_TASKS:     tasks.filter(t => t.type === 'work').map(t => ({ ...t, done: !!t.done })),
+    STUDY_TASKS:    tasks.filter(t => t.type === 'study').map(t => ({ ...t, done: !!t.done })),
     CONTACTS: contacts.map(c => ({ ...c, lastContact: c.last_contact, daysSince: c.days_since, nextWhen: c.next_when })),
     DEALS: deals,
     FIN_INCOME: fin_income,
@@ -47,7 +48,7 @@ async function toggleTask(id, done) {
   await apiPatch('tasks', id, { done: done ? 1 : 0 });
 }
 async function createTask({ title, due, priority, type, tag, description }) {
-  const id = (type === 'personal' ? 'p' : 'w') + Date.now();
+  const id = (type === 'personal' ? 'p' : type === 'work' ? 'w' : 'e') + Date.now();
   await apiPost('tasks', { id, title, due: due || '', priority, type, tag: tag || null, done: 0, description: description || '' });
 }
 async function deleteTask(id) { await apiDel('tasks', id); }

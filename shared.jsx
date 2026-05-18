@@ -1,6 +1,21 @@
 // 7on OS — shared components
 const { useState, useEffect, useMemo } = React;
 
+function fmtDate(s) {
+  if (!s) return s;
+  const months = {
+    'января':'01','февраля':'02','марта':'03','апреля':'04',
+    'мая':'05','июня':'06','июля':'07','августа':'08',
+    'сентября':'09','октября':'10','ноября':'11','декабря':'12',
+  };
+  const m = s.trim().match(/^(\d{1,2})\s+([а-яёА-ЯЁ]+)$/);
+  if (m && months[m[2].toLowerCase()]) {
+    return `${m[1].padStart(2,'0')}.${months[m[2].toLowerCase()]}`;
+  }
+  return s;
+}
+window.fmtDate = fmtDate;
+
 // ── Modal ────────────────────────────────────────────────────────────────────
 const Modal = ({ title, onClose, onConfirm, confirmLabel = 'Сохранить', confirmDisabled = false, children }) => {
   useEffect(() => {
@@ -67,7 +82,7 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
       <div className="task-body">
         <div className="task-title">{task.title}</div>
         <div className="task-meta">
-          <span>{task.due}</span>
+          <span>{fmtDate(task.due)}</span>
           {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
           {task.description && <><span className="dot" /><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>заметка</span></>}
         </div>

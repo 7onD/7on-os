@@ -2,6 +2,7 @@
 const Dashboard = ({ D, setRoute, refresh }) => {
   const personalCount = D.PERSONAL_TASKS.filter(t => !t.done).length;
   const workCount = D.WORK_TASKS.filter(t => !t.done).length;
+  const studyCount = (D.STUDY_TASKS || []).filter(t => !t.done).length;
   const totalCommission = D.DEALS.reduce((s, d) => s + d.commission, 0);
   const monthIncome = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].income : 0;
   const monthExpenses = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].expenses : 0;
@@ -40,11 +41,12 @@ const Dashboard = ({ D, setRoute, refresh }) => {
         <div className="card" style={{ gridColumn: 'span 3' }}>
           <div className="stat-label">Открытых задач</div>
           <div className="stat-big mono">
-            {personalCount + workCount}
+            {personalCount + workCount + studyCount}
           </div>
-          <div style={{ marginTop: 6, display: 'flex', gap: 12 }} className="mono">
+          <div style={{ marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }} className="mono">
             <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{personalCount} личных</span>
             <span style={{ fontSize: 11, color: 'var(--accent)' }}>{workCount} рабочих</span>
+            <span style={{ fontSize: 11, color: 'var(--blue)' }}>{studyCount} учебных</span>
           </div>
         </div>
 
@@ -144,13 +146,13 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div key={c.id} style={{ padding: '10px 0', borderBottom: i < hotLeads.length - 1 ? '1px solid var(--border)' : 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div className="contact-name">{c.name}</div>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{c.lastContact}</span>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmtDate(c.lastContact)}</span>
               </div>
               <div className="contact-addr" style={{ marginTop: 4 }}>{c.addr}</div>
               <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>{c.params}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                 <span className="mono" style={{ fontSize: 10.5, color: 'var(--accent)' }}>→ {c.next}</span>
-                <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>· {c.nextWhen}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>· {fmtDate(c.nextWhen)}</span>
               </div>
             </div>
           ))}
@@ -179,7 +181,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
                 </div>
                 <div className="deal-meta">
                   <span>комиссия ₽{(d.commission * 1000).toFixed(0)}k</span>
-                  <span>· к {d.expected}</span>
+                  <span>· к {fmtDate(d.expected)}</span>
                 </div>
               </div>
             ))}

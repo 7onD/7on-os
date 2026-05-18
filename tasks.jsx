@@ -17,7 +17,8 @@ const TasksPage = ({ D, refresh }) => {
 
   const personal = filterTasks(D.PERSONAL_TASKS);
   const work = filterTasks(D.WORK_TASKS);
-  const allTasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS);
+  const study = filterTasks(D.STUDY_TASKS || []);
+  const allTasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || []);
 
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
@@ -30,6 +31,7 @@ const TasksPage = ({ D, refresh }) => {
       await refresh();
       setShowAdd(false);
       setForm({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '' });
+
     } finally { setSaving(false); }
   };
 
@@ -89,6 +91,7 @@ const TasksPage = ({ D, refresh }) => {
         <div className="card-title" style={{ display:'flex', alignItems:'center', gap:8 }}>
           {title} <span className="count">{tasks.length}</span>
           {type === 'work' && <span className="tag work">Риэлтор</span>}
+          {type === 'study' && <span className="tag" style={{ background:'rgba(122,167,255,0.12)', color:'var(--blue)' }}>Учёба</span>}
         </div>
         <button className="btn ghost" style={{ padding:'4px 8px' }} onClick={() => { set('type', type); setShowAdd(true); }}>
           <Icon name="plus" size={13} /> Задача
@@ -148,6 +151,7 @@ const TasksPage = ({ D, refresh }) => {
               <FSelect value={form.type} onChange={e => set('type', e.target.value)}>
                 <option value="personal">Личная</option>
                 <option value="work">Рабочая</option>
+                <option value="study">Учебная</option>
               </FSelect>
             </Field>
             {form.type === 'work' && (
@@ -247,9 +251,10 @@ const TasksPage = ({ D, refresh }) => {
         <button className="filter"><Icon name="filter" size={12} /> Сортировка: дата</button>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns:'1fr 1fr' }}>
+      <div className="grid" style={{ gridTemplateColumns:'1fr 1fr 1fr' }}>
         <TaskBlock title="Личное" tasks={personal} type="personal" />
         <TaskBlock title="Работа" tasks={work} type="work" />
+        <TaskBlock title="Учёба" tasks={study} type="study" />
       </div>
     </div>
   );
