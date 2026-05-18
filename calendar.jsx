@@ -6,17 +6,23 @@ const CalendarPage = ({ D, refresh }) => {
   const [detailEvent, setDetailEvent] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
+  const [weekOffset, setWeekOffset] = React.useState(0);
 
   const HOURS = Array.from({ length: 11 }, (_, i) => 9 + i);
-  const DAYS = [
-    { num: 18, dow: 'Пн', today: true },
-    { num: 19, dow: 'Вт' },
-    { num: 20, dow: 'Ср' },
-    { num: 21, dow: 'Чт' },
-    { num: 22, dow: 'Пт' },
-    { num: 23, dow: 'Сб' },
-    { num: 24, dow: 'Вс' },
-  ];
+  const BASE_MON = new Date(2026, 4, 18); // May 18 2026 — the "today" Monday
+  const MONTH_NAMES_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const DOW_NAMES = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+  const DAYS = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(BASE_MON);
+    d.setDate(BASE_MON.getDate() + weekOffset * 7 + i);
+    return { num: d.getDate(), month: d.getMonth(), year: d.getFullYear(), dow: DOW_NAMES[i], today: weekOffset === 0 && i === 0 };
+  });
+
+  const firstD = DAYS[0], lastD = DAYS[6];
+  const weekLabel = firstD.month === lastD.month
+    ? `${firstD.num}–${lastD.num} ${MONTH_NAMES_SHORT[firstD.month]}, ${firstD.year}`
+    : `${firstD.num} ${MONTH_NAMES_SHORT[firstD.month]} – ${lastD.num} ${MONTH_NAMES_SHORT[lastD.month]}, ${firstD.year}`;
 
   const KIND_LABELS = { work: 'Работа', deal: 'Сделка', meeting: 'Встреча', personal: 'Личное' };
   const KIND_COLORS = { deal: 'var(--violet)', work: 'var(--accent)', meeting: 'var(--orange)', personal: 'var(--blue)' };
@@ -110,13 +116,7 @@ const CalendarPage = ({ D, refresh }) => {
           <div className="form-row">
             <Field label="День недели">
               <FSelect value={form.day} onChange={e => set('day', e.target.value)}>
-                <option value="1">Пн 18</option>
-                <option value="2">Вт 19</option>
-                <option value="3">Ср 20</option>
-                <option value="4">Чт 21</option>
-                <option value="5">Пт 22</option>
-                <option value="6">Сб 23</option>
-                <option value="7">Вс 24</option>
+                {DAYS.map((d, i) => <option key={i} value={String(i+1)}>{d.dow} {d.num}</option>)}
               </FSelect>
             </Field>
             <Field label="Тип">
@@ -154,8 +154,7 @@ const CalendarPage = ({ D, refresh }) => {
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>День</span>
                   <FSelect value={detailForm.day} onChange={e => setDE('day', e.target.value)} style={{ fontSize:13, flex:1 }}>
-                    <option value="1">Пн 18</option><option value="2">Вт 19</option><option value="3">Ср 20</option>
-                    <option value="4">Чт 21</option><option value="5">Пт 22</option><option value="6">Сб 23</option><option value="7">Вс 24</option>
+                    {DAYS.map((d, i) => <option key={i} value={String(i+1)}>{d.dow} {d.num}</option>)}
                   </FSelect>
                 </div>
                 <div className="task-detail-row">
@@ -211,10 +210,10 @@ const CalendarPage = ({ D, refresh }) => {
 
       <div className="cal-header" style={{ display: 'flex', gap: 10, marginBottom: 18, alignItems: 'center', flexWrap: 'wrap' }}>
         <div className="cal-nav" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button className="btn"><Icon name="chevron-left" size={12} /></button>
-          <div className="mono cal-date-label" style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>18–24 мая, 2026</div>
-          <button className="btn"><Icon name="chevron-right" size={12} /></button>
-          <button className="btn ghost">Сегодня</button>
+          <button className="btn" onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
+          <div className="mono cal-date-label" style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>{weekLabel}</div>
+          <button className="btn" onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
+          <button className="btn ghost" onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>Сегодня</button>
         </div>
         <div style={{ flex: 1 }} />
         <div className="cal-filters filters" style={{ marginBottom: 0 }}>
@@ -233,7 +232,7 @@ const CalendarPage = ({ D, refresh }) => {
           if (dayEvents.length === 0) return null;
           return (
             <div key={d.num} style={{ marginBottom: 16 }}>
-              <div className="stat-label" style={{ marginBottom: 6 }}>{d.dow} {d.num}</div>
+              <div className="stat-label" style={{ marginBottom: 6 }}>{d.dow} {d.num} {MONTH_NAMES_SHORT[d.month]}</div>
               {dayEvents.map(e => (
                 <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 10, marginBottom: 6, alignItems: 'center', cursor: 'pointer' }}
                   onClick={(ev) => openDetail(ev, e)}>

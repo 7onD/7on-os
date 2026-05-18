@@ -208,6 +208,19 @@ const FilePreview = ({ file, onClose }) => {
   };
 
   const mockBody = () => {
+    if (file.type === 'image' && file.key) {
+      return (
+        <img src={getDownloadUrl(file.key, true)} alt={file.name}
+          style={{ maxWidth:'100%', maxHeight:'60vh', borderRadius:8, objectFit:'contain', boxShadow:'0 8px 32px rgba(0,0,0,0.4)' }}
+          onError={e => { e.target.replaceWith(Object.assign(document.createElement('div'), { className: 'preview-image-mock' })); }} />
+      );
+    }
+    if (file.type === 'pdf' && file.key) {
+      return (
+        <iframe src={getDownloadUrl(file.key, true)} title={file.name}
+          style={{ width:'100%', height:'56vh', border:'none', borderRadius:4 }} />
+      );
+    }
     if (file.type === 'image') return <div className="preview-image-mock" />;
     return (
       <div className="preview-mock">

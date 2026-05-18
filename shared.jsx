@@ -97,25 +97,36 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
 };
 
 // ── MiniCal ──────────────────────────────────────────────────────────────────
-const MiniCal = ({ year = 2026, month = 4, today = 18, eventDays = [], selectedDay = null, onDayClick }) => {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
+const MiniCal = ({ year: initYear = 2026, month: initMonth = 4, today = 18, eventDays = [], selectedDay = null, onDayClick }) => {
+  const [calYear,  setCalYear]  = React.useState(initYear);
+  const [calMonth, setCalMonth] = React.useState(initMonth);
+
+  const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); };
+  const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); };
+  const goToday   = () => { setCalYear(initYear); setCalMonth(initMonth); };
+
+  const firstDay = new Date(calYear, calMonth, 1);
+  const lastDay  = new Date(calYear, calMonth + 1, 0);
   const startWeekday = (firstDay.getDay() + 6) % 7;
-  const daysInMonth = lastDay.getDate();
+  const daysInMonth  = lastDay.getDate();
   const cells = [];
-  const prevMonthLast = new Date(year, month, 0).getDate();
+  const prevMonthLast = new Date(calYear, calMonth, 0).getDate();
   for (let i = startWeekday - 1; i >= 0; i--) cells.push({ d: prevMonthLast - i, out: true });
   for (let d = 1; d <= daysInMonth; d++) cells.push({ d, out: false });
   while (cells.length < 42) cells.push({ d: cells.length - daysInMonth - startWeekday + 1, out: true });
   const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   const dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const isCurrentMonth = calYear === initYear && calMonth === initMonth;
   return (
     <div className="minical">
       <div className="minical-head">
-        <span>{monthNames[month]} {year}</span>
-        <span style={{ display: 'flex', gap: 6 }}>
-          <button className="icon-btn" style={{ width: 24, height: 24, borderRadius: 6 }}><Icon name="chevron-left" size={12} /></button>
-          <button className="icon-btn" style={{ width: 24, height: 24, borderRadius: 6 }}><Icon name="chevron-right" size={12} /></button>
+        <span style={{ cursor:'pointer', userSelect:'none' }} onClick={goToday} title="Вернуться к сегодня">
+          {monthNames[calMonth]} {calYear}
+          {!isCurrentMonth && <span style={{ fontSize:10, color:'var(--accent)', marginLeft:6, fontFamily:'var(--font-mono)' }}>← сегодня</span>}
+        </span>
+        <span style={{ display: 'flex', gap: 4 }}>
+          <button className="icon-btn" style={{ width:24, height:24, borderRadius:6 }} onClick={prevMonth} title="Предыдущий месяц"><Icon name="chevron-left" size={12} /></button>
+          <button className="icon-btn" style={{ width:24, height:24, borderRadius:6 }} onClick={nextMonth} title="Следующий месяц"><Icon name="chevron-right" size={12} /></button>
         </span>
       </div>
       <div className="minical-grid">
@@ -123,10 +134,10 @@ const MiniCal = ({ year = 2026, month = 4, today = 18, eventDays = [], selectedD
         {cells.map((c, i) => (
           <div key={i} className="minical-day"
             data-out={c.out ? '1' : '0'}
-            data-today={!c.out && c.d === today ? '1' : '0'}
-            data-has={!c.out && eventDays.includes(c.d) ? '1' : '0'}
-            data-selected={!c.out && c.d === selectedDay ? '1' : '0'}
-            style={!c.out && onDayClick ? { cursor: 'pointer' } : undefined}
+            data-today={!c.out && isCurrentMonth && c.d === today ? '1' : '0'}
+            data-has={!c.out && isCurrentMonth && eventDays.includes(c.d) ? '1' : '0'}
+            data-selected={!c.out && isCurrentMonth && c.d === selectedDay ? '1' : '0'}
+            style={!c.out && onDayClick ? { cursor:'pointer' } : undefined}
             onClick={() => !c.out && onDayClick && onDayClick(c.d)}
           >{c.d}</div>
         ))}

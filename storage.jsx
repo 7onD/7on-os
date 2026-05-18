@@ -19,10 +19,10 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [newLine, setNewLine]         = React.useState('');
   const [uploading, setUploading]     = React.useState(false);
   const [uploadError, setUploadError] = React.useState('');
-  const [fileMenuId, setFileMenuId]   = React.useState(null);
-  const [renameFile, setRenameFile]   = React.useState(null); // { id, name }
+  const [fileMenuPos, setFileMenuPos] = React.useState(null); // { id, top, left }
+  const [renameFile, setRenameFile]   = React.useState(null);
   const [renameName, setRenameName]   = React.useState('');
-  const newlineRef  = React.useRef(null);
+  const newlineRef   = React.useRef(null);
   const fileInputRef = React.useRef(null);
   const fileMenuRef  = React.useRef(null);
 
@@ -30,11 +30,11 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   // Close file menu on outside click
   React.useEffect(() => {
-    if (!fileMenuId) return;
-    const handler = e => { if (fileMenuRef.current && !fileMenuRef.current.contains(e.target)) setFileMenuId(null); };
+    if (!fileMenuPos) return;
+    const handler = e => { if (fileMenuRef.current && !fileMenuRef.current.contains(e.target)) setFileMenuPos(null); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [fileMenuId]);
+  }, [fileMenuPos]);
   React.useEffect(() => {
     if (!selectedNote && notes.length > 0) setSelectedNote(notes[0].id);
   }, [notes]);
@@ -192,14 +192,14 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const handleDeleteFile = async (file) => {
-    setFileMenuId(null);
+    setFileMenuPos(null);
     if (!confirm(`Удалить «${file.name}»?`)) return;
     await deleteFileRecord(file.id);
     await refresh();
   };
 
   const openRename = (file) => {
-    setFileMenuId(null);
+    setFileMenuPos(null);
     setRenameFile(file);
     setRenameName(file.name);
   };
@@ -212,26 +212,17 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const renderFileMenu = (file) => (
-    <div style={{ position:'relative' }} ref={fileMenuRef} onClick={e => e.stopPropagation()}>
-      <button className="icon-btn file-menu-btn"
-        style={{ width:26, height:26, opacity: fileMenuId === file.id ? 1 : undefined }}
-        onClick={e => { e.stopPropagation(); setFileMenuId(id => id === file.id ? null : file.id); }}
-        title="Действия">
-        <Icon name="more" size={14} />
-      </button>
-      {fileMenuId === file.id && (
-        <div className="file-dropdown">
-          <button className="file-dropdown-item" onClick={() => openRename(file)}>
-            <Icon name="edit" size={13} /> Переименовать
-          </button>
-          {!file.demo && (
-            <button className="file-dropdown-item danger" onClick={() => handleDeleteFile(file)}>
-              <Icon name="trash" size={13} /> Удалить
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+    <button className="icon-btn file-menu-btn"
+      style={{ width:26, height:26, flexShrink:0, opacity: fileMenuPos?.id === file.id ? 1 : undefined }}
+      onClick={e => {
+        e.stopPropagation();
+        if (fileMenuPos?.id === file.id) { setFileMenuPos(null); return; }
+        const r = e.currentTarget.getBoundingClientRect();
+        setFileMenuPos({ id: file.id, top: r.bottom + 4, left: r.right - 168 });
+      }}
+      title="Действия">
+      <Icon name="more" size={14} />
+    </button>
   );
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -503,9 +494,14 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             )}
             <div className="files-grid">
               {filteredFiles.map(f => (
-                <div key={f.id} className="file-card" onClick={() => { if (fileMenuId === f.id) return; setPreviewFile(f); }} style={{ position:'relative' }}>
+                <div key={f.id} className="file-card" onClick={() => { if (fileMenuPos?.id === f.id) return; setPreviewFile(f); }} style={{ position:'relative' }}>
                   <div className={`file-thumb ${f.type}`}>
-                    <Icon name={fileIconName(f.type)} size={32} stroke={1.2} />
+                    {f.type === 'image' && f.key && (
+                      <img src={getDownloadUrl(f.key, true)} alt=""
+                        style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', zIndex:0 }}
+                        onError={e => { e.target.style.display='none'; }} />
+                    )}
+                    <Icon name={fileIconName(f.type)} size={32} stroke={1.2} style={{ position:'relative', zIndex:1 }} />
                     <span className="badge">{fileTypeLabel(f.type)}</span>
                     {f.demo && <span className="badge" style={{ right:'auto', left:8, background:'rgba(255,180,94,0.15)', color:'var(--orange)', borderColor:'rgba(255,180,94,0.25)' }}>demo</span>}
                   </div>
@@ -533,7 +529,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             <div className="files-list">
               <div className="file-row head"><div>Название</div><div>Тип</div><div>Изменён</div><div>Размер</div><div /></div>
               {filteredFiles.map(f => (
-                <div key={f.id} className="file-row" onClick={() => { if (fileMenuId === f.id) return; setPreviewFile(f); }}>
+                <div key={f.id} className="file-row" onClick={() => { if (fileMenuPos?.id === f.id) return; setPreviewFile(f); }}>
                   <div className="name-cell">
                     <span className={`ic ${f.type}`}><Icon name={fileIconName(f.type)} size={15} /></span>
                     <div style={{ minWidth:0 }}>
@@ -569,6 +565,26 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
         renderFilesPane()
       )}
       {previewFile && <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
+
+      {fileMenuPos && (() => {
+        const f = FILES.find(x => x.id === fileMenuPos.id);
+        if (!f) return null;
+        return (
+          <div ref={fileMenuRef} style={{ position:'fixed', top: fileMenuPos.top, left: fileMenuPos.left, zIndex:300 }}
+            onClick={e => e.stopPropagation()}>
+            <div className="file-dropdown" style={{ position:'static' }}>
+              <button className="file-dropdown-item" onClick={() => openRename(f)}>
+                <Icon name="edit" size={13} /> Переименовать
+              </button>
+              {!f.demo && (
+                <button className="file-dropdown-item danger" onClick={() => handleDeleteFile(f)}>
+                  <Icon name="trash" size={13} /> Удалить
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {renameFile && (
         <Modal title="Переименовать файл"
