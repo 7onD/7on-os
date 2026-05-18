@@ -29,28 +29,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     <div>
       <div className="grid cols-12">
         {/* Top KPI row */}
-        <div className="card" style={{ gridColumn: 'span 3' }}>
-          <div className="stat-label">Доход · май</div>
-          <div className="stat-big mono">
-            <span className="currency">₽</span>{monthIncome.toLocaleString('ru-RU')}<span style={{ color: 'var(--text-faint)', fontSize: 16 }}>k</span>
-          </div>
-          <div style={{ marginTop: 6 }}>
-            <span className="delta up mono">↑ 26.6%</span>
-            <span className="mono" style={{ color: 'var(--text-faint)', fontSize: 11, marginLeft: 6 }}>vs апрель</span>
-          </div>
-        </div>
-
-        <div className="card" style={{ gridColumn: 'span 3' }}>
-          <div className="stat-label">Ожидается · комиссии</div>
-          <div className="stat-big mono">
-            <span className="currency">₽</span>{(totalCommission * 1000).toLocaleString('ru-RU')}<span style={{ color: 'var(--text-faint)', fontSize: 16 }}>k</span>
-          </div>
-          <div style={{ marginTop: 6 }} className="mono">
-            <span style={{ color: 'var(--violet)', fontSize: 11 }}>{D.DEALS.length} активные сделки</span>
-          </div>
-        </div>
-
-        <div className="card" style={{ gridColumn: 'span 3' }}>
+        <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="stat-label">Открытых задач</div>
           <div className="stat-big mono">
             {personalCount + workCount + studyCount}
@@ -62,7 +41,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           </div>
         </div>
 
-        <div className="card" style={{ gridColumn: 'span 3' }}>
+        <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="stat-label">Контакты · требуют касания</div>
           <div className="stat-big mono">
             {D.CONTACTS.filter(c => c.daysSince >= 7).length}

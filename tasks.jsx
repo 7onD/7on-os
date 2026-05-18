@@ -1,9 +1,9 @@
 // 7on OS — Tasks page
 const TasksPage = ({ D, refresh }) => {
   const [filter, setFilter] = React.useState('all');
-  const [sort, setSort]     = React.useState('date'); // 'date' | 'priority' | 'alpha'
+  const [sort, setSort]     = React.useState('date');
   const [showAdd, setShowAdd] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '' });
+  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '', reminder: '-1' });
   const [saving, setSaving] = React.useState(false);
   const [detailTask, setDetailTask] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
@@ -44,10 +44,10 @@ const TasksPage = ({ D, refresh }) => {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await createTask({ title: form.title.trim(), due: form.due, priority: form.priority, type: form.type, tag: form.type === 'work' ? form.tag : null, description: form.description });
+      await createTask({ title: form.title.trim(), due: form.due, priority: form.priority, type: form.type, tag: form.type === 'work' ? form.tag : null, description: form.description, reminder: parseInt(form.reminder) });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '' });
+      setForm({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '', reminder: '-1' });
 
     } finally { setSaving(false); }
   };
@@ -61,6 +61,7 @@ const TasksPage = ({ D, refresh }) => {
       description: task.description || '',
       tag: task.tag || '',
       done: task.done || false,
+      reminder: String(task.reminder ?? '-1'),
     });
   };
 
@@ -75,6 +76,7 @@ const TasksPage = ({ D, refresh }) => {
         description: detailForm.description,
         tag: detailForm.tag || null,
         done: detailForm.done,
+        reminder: parseInt(detailForm.reminder),
       });
       await refresh();
       setDetailTask(null);
@@ -175,6 +177,11 @@ const TasksPage = ({ D, refresh }) => {
               <Field label="Метка"><FInput placeholder="Показ, Звонки…" value={form.tag} onChange={e => set('tag', e.target.value)} /></Field>
             )}
           </div>
+          <Field label="Напоминание">
+            <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
+              {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </FSelect>
+          </Field>
           <Field label="Заметки">
             <DescriptionWithLinks placeholder="Дополнительная информация… (/ для ссылки на файл или заметку)" value={form.description} onChange={e => set('description', e.target.value)} />
           </Field>
@@ -225,6 +232,12 @@ const TasksPage = ({ D, refresh }) => {
                 )}
               </div>
 
+              <div className="task-detail-row" style={{ marginTop:12 }}>
+                <span className="stat-label" style={{ minWidth:80 }}>Напоминание</span>
+                <FSelect value={detailForm.reminder} onChange={e => setD('reminder', e.target.value)} style={{ fontSize:13, flex:1 }}>
+                  {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </FSelect>
+              </div>
               <div style={{ marginTop:18 }}>
                 <div className="stat-label" style={{ marginBottom:8 }}>Заметки</div>
                 <DescriptionWithLinks

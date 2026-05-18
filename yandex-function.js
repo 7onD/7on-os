@@ -72,6 +72,13 @@ module.exports.handler = async (event) => {
   if (!table && !action) return reply({ message: '7on OS API v2 — Yandex' });
 
   try {
+    // ── check-password: verify without exposing password in source code ─────────
+    if (action === 'check-password') {
+      const body = parseBody(event);
+      const stored = process.env.APP_PASSWORD || '0510';
+      return reply({ ok: body.password === stored });
+    }
+
     // ── upload: proxy file upload through function (no CORS/static-keys needed) ─
     if (action === 'upload') {
       const body = parseBody(event);

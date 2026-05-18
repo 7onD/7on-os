@@ -1,19 +1,35 @@
 // 7on OS — main app
 const { useState, useEffect, useCallback, useRef } = React;
 
-const LockScreen = ({ onUnlock }) => {
-  const [pwd, setPwd] = React.useState('');
-  const [err, setErr] = React.useState(false);
+const _API_URL = 'https://functions.yandexcloud.net/d4eck1v8o203hh4lr9ov';
 
-  const tryUnlock = () => {
-    if (pwd === '0510') {
-      sessionStorage.setItem('7on_auth', '1');
-      onUnlock();
-    } else {
-      setErr(true);
-      setPwd('');
+const LockScreen = ({ onUnlock }) => {
+  const [pwd, setPwd]         = React.useState('');
+  const [err, setErr]         = React.useState(false);
+  const [checking, setChecking] = React.useState(false);
+
+  const tryUnlock = async () => {
+    if (!pwd || checking) return;
+    setChecking(true);
+    try {
+      const r = await fetch(`${_API_URL}?action=check-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        sessionStorage.setItem('7on_auth', '1');
+        onUnlock();
+      } else {
+        setErr(true); setPwd('');
+        setTimeout(() => setErr(false), 1500);
+      }
+    } catch (e) {
+      // Network error — fallback: still block access, don't reveal password
+      setErr(true); setPwd('');
       setTimeout(() => setErr(false), 1500);
-    }
+    } finally { setChecking(false); }
   };
 
   return (
@@ -45,8 +61,9 @@ const LockScreen = ({ onUnlock }) => {
         {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--red)' }}>Неверный пароль</div>}
         <button
           onClick={tryUnlock}
-          style={{ padding:'10px 40px', borderRadius:10, background:'var(--accent)', border:0, color:'#0a0a0a', fontFamily:'var(--font-mono)', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:4 }}>
-          Войти
+          disabled={checking || !pwd}
+          style={{ padding:'10px 40px', borderRadius:10, background:'var(--accent)', border:0, color:'#0a0a0a', fontFamily:'var(--font-mono)', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:4, opacity: (checking || !pwd) ? 0.6 : 1 }}>
+          {checking ? 'Проверка…' : 'Войти'}
         </button>
       </div>
     </div>
@@ -252,8 +269,13 @@ const App = () => {
     contacts: 'Контакты собственников',
     storage: 'Хранилище',
   };
+  const _now = new Date();
+  const _pad = n => String(n).padStart(2,'0');
+  const _MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const _todayFmt = `${_pad(_now.getDate())}.${_pad(_now.getMonth()+1)} (${_MONTHS[_now.getMonth()]}) ${_now.getFullYear()}`;
+
   const PAGE_SUBTITLE = {
-    dashboard: 'Добрый день, Семён · 18.05.2026',
+    dashboard: `Добрый день, Семён · ${_todayFmt}`,
     tasks: 'Личные, рабочие, учебные',
     calendar: 'Неделя 21 · 18–24.05',
     finance: 'Доход, расходы, сделки и цели',
@@ -293,7 +315,6 @@ const App = () => {
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Escape' && setQuery('')}
               />
-              {!query && <span className="kbd">⌘K</span>}
             </div>
             {query && <SearchOverlay query={query} D={D} setRoute={setRoute} onClose={() => setQuery('')} />}
           </div>
@@ -301,10 +322,6 @@ const App = () => {
             <div className="topbar-stat">
               <div className="lbl">Сегодня</div>
               <div className="val tnum">{D.EVENTS.filter(e => e.day === 1).length} событий</div>
-            </div>
-            <div className="topbar-stat">
-              <div className="lbl">Сделки</div>
-              <div className="val accent tnum">{D.DEALS.length}</div>
             </div>
           </div>
           <div className="topbar-actions">
@@ -330,6 +347,9 @@ const App = () => {
       </div>
 
       <MobileNav route={route} setRoute={setRoute} />
+      {D && <RemindersManager
+        tasks={[...(D.PERSONAL_TASKS||[]), ...(D.WORK_TASKS||[]), ...(D.STUDY_TASKS||[])]}
+        events={D.EVENTS||[]} />}
 
       <TweaksPanel title="7on OS — настройка">
         <TweakSection label="Цвет" />

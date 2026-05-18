@@ -1,0 +1,185 @@
+// 7on OS — Reminders & Notifications
+const REMINDER_OPTIONS = [
+  { value: '-1',  label: 'Нет' },
+  { value: '0',   label: 'В момент события' },
+  { value: '5',   label: 'За 5 минут' },
+  { value: '15',  label: 'За 15 минут' },
+  { value: '30',  label: 'За 30 минут' },
+  { value: '60',  label: 'За 1 час' },
+  { value: '120', label: 'За 2 часа' },
+  { value: '1440', label: 'За 1 день' },
+];
+
+// Storage helpers
+function wasNotified(key) {
+  return localStorage.getItem('7on_notif_' + key) === '1';
+}
+function markNotified(key) {
+  localStorage.setItem('7on_notif_' + key, '1');
+}
+
+function fireNotification(title, body, tag) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, tag, silent: false }); } catch(e) {}
+}
+
+// Event day (1-7) + hour → Date. Base: Mon 18 May 2026.
+const CAL_BASE = new Date(2026, 4, 18);
+function eventToDate(dayNum, hourFloat) {
+  const d = new Date(CAL_BASE);
+  d.setDate(CAL_BASE.getDate() + (dayNum - 1));
+  d.setHours(Math.floor(hourFloat), Math.round((hourFloat % 1) * 60), 0, 0);
+  return d;
+}
+
+// Best-effort task due date → Date (fires at 9:00)
+function parseDueDate(due) {
+  if (!due) return null;
+  const s = due.toLowerCase().trim();
+  const now = new Date();
+  if (s.startsWith('сегодня') || s === 'today') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+  }
+  if (s.startsWith('завтра') || s === 'tomorrow') {
+    const d = new Date(now); d.setDate(d.getDate() + 1);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0);
+  }
+  const MONTH_MAP = {
+    'янв':0,'феврал':1,'март':2,'апрел':3,'май':4,'мая':4,'июн':5,'июл':6,'авг':7,'сентябр':8,'сен':8,'октябр':9,'окт':9,'ноябр':10,'ноя':10,'декабр':11,'дек':11
+  };
+  for (const [key, mi] of Object.entries(MONTH_MAP)) {
+    if (s.includes(key)) {
+      const m = s.match(/(\d+)/);
+      if (m) return new Date(now.getFullYear(), mi, parseInt(m[1]), 9, 0, 0);
+    }
+  }
+  const dot = s.match(/(\d{1,2})\.(\d{1,2})/);
+  if (dot) return new Date(now.getFullYear(), parseInt(dot[2]) - 1, parseInt(dot[1]), 9, 0, 0);
+  return null;
+}
+
+// ── RemindersManager component ────────────────────────────────────────────────
+const RemindersManager = ({ tasks, events }) => {
+  const [perm, setPerm]   = React.useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+  const [show, setShow]   = React.useState(false);
+
+  // Show banner if permission not granted
+  React.useEffect(() => {
+    if (perm === 'default') setShow(true);
+    if (perm === 'denied')  setShow(true);
+  }, [perm]);
+
+  const request = async () => {
+    if (typeof Notification === 'undefined') return;
+    const res = await Notification.requestPermission();
+    setPerm(res);
+    if (res === 'granted') setShow(false);
+  };
+
+  // Re-check permission every 10s in case user enables it in browser settings
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      if (typeof Notification !== 'undefined') {
+        const cur = Notification.permission;
+        setPerm(p => { if (p !== cur) { if (cur === 'granted') setShow(false); return cur; } return p; });
+      }
+    }, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Polling check
+  React.useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+
+    const check = () => {
+      if (Notification.permission !== 'granted') return;
+      const now = new Date();
+
+      // Events
+      (events || []).forEach(ev => {
+        const mins = parseInt(ev.reminder ?? '-1');
+        if (mins < 0) return;
+        const evDate = eventToDate(ev.day, ev.start);
+        const fireAt = new Date(evDate.getTime() - mins * 60000);
+        const diff = now - fireAt;
+        if (diff >= 0 && diff < 60000) {
+          const key = `ev_${ev.id}_${mins}`;
+          if (!wasNotified(key)) {
+            const when = mins === 0 ? 'начинается сейчас'
+              : mins < 60 ? `через ${mins} мин`
+              : mins === 60 ? 'через 1 час'
+              : mins >= 1440 ? 'завтра'
+              : `через ${mins / 60} ч`;
+            fireNotification(`📅 ${ev.title}`, when, key);
+            markNotified(key);
+          }
+        }
+      });
+
+      // Tasks
+      (tasks || []).forEach(t => {
+        if (t.done) return;
+        const mins = parseInt(t.reminder ?? '-1');
+        if (mins < 0) return;
+        const dueDate = parseDueDate(t.due);
+        if (!dueDate) return;
+        const fireAt = new Date(dueDate.getTime() - mins * 60000);
+        const diff = now - fireAt;
+        if (diff >= 0 && diff < 60000) {
+          const key = `task_${t.id}_${mins}`;
+          if (!wasNotified(key)) {
+            const when = mins === 0 ? 'срок наступил'
+              : mins < 60 ? `срок через ${mins} мин`
+              : mins >= 1440 ? 'срок завтра'
+              : `срок через ${mins / 60} ч`;
+            fireNotification(`✅ ${t.title}`, when, key);
+            markNotified(key);
+          }
+        }
+      });
+    };
+
+    check();
+    const timer = setInterval(check, 30000);
+    return () => clearInterval(timer);
+  }, [tasks, events]);
+
+  if (perm === 'unsupported' || !show) return null;
+
+  return (
+    <div style={{
+      position:'fixed', bottom:76, right:16, zIndex:400, maxWidth:300,
+      background:'var(--surface-2)', border:'1px solid var(--border-strong)',
+      borderRadius:14, padding:'14px 16px',
+      boxShadow:'0 8px 32px rgba(0,0,0,0.4)',
+      animation:'slideUp 0.3s cubic-bezier(0.16,1,0.3,1)',
+    }}>
+      <div style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:12 }}>
+        <span style={{ fontSize:22, lineHeight:1 }}>🔔</span>
+        <div>
+          <div style={{ fontSize:13, fontWeight:600, marginBottom:4, color:'var(--text)' }}>
+            {perm === 'denied' ? 'Уведомления заблокированы' : 'Разрешите уведомления'}
+          </div>
+          <div style={{ fontSize:11.5, color:'var(--text-dim)', lineHeight:1.55 }}>
+            {perm === 'denied'
+              ? 'Откройте настройки браузера → Уведомления, разрешите для этого сайта.'
+              : 'Чтобы получать напоминания о задачах и событиях вовремя.'}
+          </div>
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn ghost" style={{ fontSize:12, padding:'5px 10px' }} onClick={() => setShow(false)}>Позже</button>
+        {perm !== 'denied' && (
+          <button className="btn primary" style={{ fontSize:12, padding:'5px 14px' }} onClick={request}>
+            Разрешить
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+window.REMINDER_OPTIONS = REMINDER_OPTIONS;
+window.RemindersManager = RemindersManager;
