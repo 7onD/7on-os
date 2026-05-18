@@ -164,6 +164,7 @@ function getDownloadUrl(key, inline = false) {
 async function createFileRecord({ id, name, type, size, folder, modified, key }) {
   await apiPost('files', { id, name, type, size, folder: folder || 'f-docs', modified, key });
 }
+async function updateFileRecord(id, updates) { await apiPatch('files', id, updates); }
 async function deleteFileRecord(id) { await apiDel('files', id); }
 
 // ── exports ───────────────────────────────────────────────────────────────────
@@ -178,6 +179,6 @@ Object.assign(window, {
   updateGoal, createGoal, deleteGoal,
   createEvent, updateEvent, deleteEvent,
   createNote, updateNote, deleteNote,
-  uploadFileProxy, getDownloadUrl, createFileRecord, deleteFileRecord,
+  uploadFileProxy, getDownloadUrl, createFileRecord, updateFileRecord, deleteFileRecord,
   detectFileType, formatFileSize,
 });

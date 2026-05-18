@@ -1,6 +1,7 @@
 // 7on OS — Tasks page
 const TasksPage = ({ D, refresh }) => {
   const [filter, setFilter] = React.useState('all');
+  const [sort, setSort]     = React.useState('date'); // 'date' | 'priority' | 'alpha'
   const [showAdd, setShowAdd] = React.useState(false);
   const [form, setForm] = React.useState({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '' });
   const [saving, setSaving] = React.useState(false);
@@ -8,11 +9,27 @@ const TasksPage = ({ D, refresh }) => {
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
 
+  const PRIO_ORDER = { high: 0, med: 1, low: 2 };
+  const sortTasks = (list) => {
+    const copy = [...list];
+    if (sort === 'priority') return copy.sort((a, b) => (PRIO_ORDER[a.priority] ?? 1) - (PRIO_ORDER[b.priority] ?? 1));
+    if (sort === 'alpha')    return copy.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+    // 'date': done tasks at bottom, then by due string (empty last)
+    return copy.sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      return a.due.localeCompare(b.due);
+    });
+  };
+
   const filterTasks = (list) => {
-    if (filter === 'open') return list.filter(t => !t.done);
-    if (filter === 'done') return list.filter(t => t.done);
-    if (filter === 'high') return list.filter(t => t.priority === 'high');
-    return list;
+    let res = list;
+    if (filter === 'open') res = res.filter(t => !t.done);
+    else if (filter === 'done') res = res.filter(t => t.done);
+    else if (filter === 'high') res = res.filter(t => t.priority === 'high');
+    return sortTasks(res);
   };
 
   const personal = filterTasks(D.PERSONAL_TASKS);
@@ -253,7 +270,10 @@ const TasksPage = ({ D, refresh }) => {
           </button>
         ))}
         <div style={{ flex:1 }} />
-        <button className="filter"><Icon name="filter" size={12} /> Сортировка: дата</button>
+        <button className="filter" data-on="1" onClick={() => setSort(s => s === 'date' ? 'priority' : s === 'priority' ? 'alpha' : 'date')}>
+          <Icon name="filter" size={12} />
+          {sort === 'date' ? 'Дата' : sort === 'priority' ? 'Приоритет' : 'А→Я'}
+        </button>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns:'1fr 1fr 1fr' }}>

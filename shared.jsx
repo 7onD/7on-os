@@ -97,7 +97,7 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
 };
 
 // ── MiniCal ──────────────────────────────────────────────────────────────────
-const MiniCal = ({ year = 2026, month = 4, today = 18, eventDays = [] }) => {
+const MiniCal = ({ year = 2026, month = 4, today = 18, eventDays = [], selectedDay = null, onDayClick }) => {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const startWeekday = (firstDay.getDay() + 6) % 7;
@@ -125,6 +125,9 @@ const MiniCal = ({ year = 2026, month = 4, today = 18, eventDays = [] }) => {
             data-out={c.out ? '1' : '0'}
             data-today={!c.out && c.d === today ? '1' : '0'}
             data-has={!c.out && eventDays.includes(c.d) ? '1' : '0'}
+            data-selected={!c.out && c.d === selectedDay ? '1' : '0'}
+            style={!c.out && onDayClick ? { cursor: 'pointer' } : undefined}
+            onClick={() => !c.out && onDayClick && onDayClick(c.d)}
           >{c.d}</div>
         ))}
       </div>

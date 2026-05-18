@@ -46,6 +46,8 @@ const Icon = ({ name, size = 16, stroke = 1.6 }) => {
       return <svg {...props}><path d="M9 6l6 6-6 6"/></svg>;
     case 'more':
       return <svg {...props}><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>;
+    case 'lock':
+      return <svg {...props}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
     case 'flame':
       return <svg {...props}><path d="M12 3s4 4 4 8a4 4 0 1 1-8 0c0-2 1-3 1-3s0 2 2 2c0-3 1-5 1-7z"/></svg>;
     case 'briefcase':

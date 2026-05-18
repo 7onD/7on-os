@@ -309,6 +309,13 @@ const App = () => {
           </div>
           <div className="topbar-actions">
             <button className="icon-btn"><Icon name="bell" size={15} /></button>
+            <button
+              className="icon-btn"
+              title="Заблокировать систему"
+              onClick={() => { sessionStorage.removeItem('7on_auth'); setUnlocked(false); }}
+              style={{ color:'var(--red)', background:'rgba(255,107,122,0.1)', border:'1px solid rgba(255,107,122,0.2)' }}>
+              <Icon name="lock" size={15} />
+            </button>
           </div>
         </div>
 

@@ -19,10 +19,22 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [newLine, setNewLine]         = React.useState('');
   const [uploading, setUploading]     = React.useState(false);
   const [uploadError, setUploadError] = React.useState('');
+  const [fileMenuId, setFileMenuId]   = React.useState(null);
+  const [renameFile, setRenameFile]   = React.useState(null); // { id, name }
+  const [renameName, setRenameName]   = React.useState('');
   const newlineRef  = React.useRef(null);
   const fileInputRef = React.useRef(null);
+  const fileMenuRef  = React.useRef(null);
 
   React.useEffect(() => { setNotes(D.NOTES || []); }, [D.NOTES]);
+
+  // Close file menu on outside click
+  React.useEffect(() => {
+    if (!fileMenuId) return;
+    const handler = e => { if (fileMenuRef.current && !fileMenuRef.current.contains(e.target)) setFileMenuId(null); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [fileMenuId]);
   React.useEffect(() => {
     if (!selectedNote && notes.length > 0) setSelectedNote(notes[0].id);
   }, [notes]);
@@ -143,9 +155,10 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
       else                              block = { kind: 'p',     text };
       await saveBlocks([...curBlocks, block]);
       setNewLine('');
-      setPendingKind('p');
+      // list and check stay active (sticky mode); h2 resets to paragraph
+      if (pendingKind === 'h2') setPendingKind('p');
     }
-    if (e.key === 'Escape') { setSlash(null); setNewLine(''); }
+    if (e.key === 'Escape') { setSlash(null); setNewLine(''); setPendingKind('p'); }
   };
 
   const onTitleChange = e => setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, title: e.target.value } : n));
@@ -179,10 +192,47 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const handleDeleteFile = async (file) => {
+    setFileMenuId(null);
     if (!confirm(`Удалить «${file.name}»?`)) return;
     await deleteFileRecord(file.id);
     await refresh();
   };
+
+  const openRename = (file) => {
+    setFileMenuId(null);
+    setRenameFile(file);
+    setRenameName(file.name);
+  };
+
+  const handleRename = async () => {
+    if (!renameFile || !renameName.trim()) return;
+    await updateFileRecord(renameFile.id, { name: renameName.trim() });
+    await refresh();
+    setRenameFile(null);
+  };
+
+  const renderFileMenu = (file) => (
+    <div style={{ position:'relative' }} ref={fileMenuRef} onClick={e => e.stopPropagation()}>
+      <button className="icon-btn file-menu-btn"
+        style={{ width:26, height:26, opacity: fileMenuId === file.id ? 1 : undefined }}
+        onClick={e => { e.stopPropagation(); setFileMenuId(id => id === file.id ? null : file.id); }}
+        title="Действия">
+        <Icon name="more" size={14} />
+      </button>
+      {fileMenuId === file.id && (
+        <div className="file-dropdown">
+          <button className="file-dropdown-item" onClick={() => openRename(file)}>
+            <Icon name="edit" size={13} /> Переименовать
+          </button>
+          {!file.demo && (
+            <button className="file-dropdown-item danger" onClick={() => handleDeleteFile(file)}>
+              <Icon name="trash" size={13} /> Удалить
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER — everything inlined as render-functions (NOT React components)
@@ -453,21 +503,19 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             )}
             <div className="files-grid">
               {filteredFiles.map(f => (
-                <div key={f.id} className="file-card" onClick={() => setPreviewFile(f)} style={{ position:'relative' }}>
+                <div key={f.id} className="file-card" onClick={() => { if (fileMenuId === f.id) return; setPreviewFile(f); }} style={{ position:'relative' }}>
                   <div className={`file-thumb ${f.type}`}>
                     <Icon name={fileIconName(f.type)} size={32} stroke={1.2} />
                     <span className="badge">{fileTypeLabel(f.type)}</span>
                     {f.demo && <span className="badge" style={{ right:'auto', left:8, background:'rgba(255,180,94,0.15)', color:'var(--orange)', borderColor:'rgba(255,180,94,0.25)' }}>demo</span>}
                   </div>
-                  <div className="file-meta">
-                    <div className="file-name">{f.name}</div>
-                    <div className="file-sub"><span>{f.size}</span><span>· {fmtDate(f.modified)}</span></div>
+                  <div className="file-meta" style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div className="file-name">{f.name}</div>
+                      <div className="file-sub"><span>{f.size}</span><span>· {fmtDate(f.modified)}</span></div>
+                    </div>
+                    {renderFileMenu(f)}
                   </div>
-                  {!f.demo && (
-                    <button className="file-card-del" onClick={e => { e.stopPropagation(); handleDeleteFile(f); }} title="Удалить">
-                      <Icon name="x" size={11} />
-                    </button>
-                  )}
                 </div>
               ))}
             </div>
@@ -485,7 +533,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
             <div className="files-list">
               <div className="file-row head"><div>Название</div><div>Тип</div><div>Изменён</div><div>Размер</div><div /></div>
               {filteredFiles.map(f => (
-                <div key={f.id} className="file-row" onClick={() => setPreviewFile(f)}>
+                <div key={f.id} className="file-row" onClick={() => { if (fileMenuId === f.id) return; setPreviewFile(f); }}>
                   <div className="name-cell">
                     <span className={`ic ${f.type}`}><Icon name={fileIconName(f.type)} size={15} /></span>
                     <div style={{ minWidth:0 }}>
@@ -496,14 +544,7 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   <div className="cell-mono">{fileTypeLabel(f.type)}</div>
                   <div className="cell-mono">{fmtDate(f.modified)}</div>
                   <div className="cell-mono">{f.size}</div>
-                  <div onClick={e => e.stopPropagation()}>
-                    {!f.demo && (
-                      <button style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', padding:'2px 4px' }}
-                        onClick={() => handleDeleteFile(f)} title="Удалить">
-                        <Icon name="trash" size={13} />
-                      </button>
-                    )}
-                  </div>
+                  <div>{renderFileMenu(f)}</div>
                 </div>
               ))}
             </div>
@@ -528,6 +569,19 @@ const StoragePage = ({ D, refresh, navTarget, onNavConsumed }) => {
         renderFilesPane()
       )}
       {previewFile && <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
+
+      {renameFile && (
+        <Modal title="Переименовать файл"
+          onClose={() => setRenameFile(null)}
+          onConfirm={handleRename}
+          confirmLabel="Сохранить"
+          confirmDisabled={!renameName.trim() || renameName.trim() === renameFile.name}>
+          <Field label="Новое название">
+            <FInput autoFocus value={renameName} onChange={e => setRenameName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRename()} placeholder="Название файла…" />
+          </Field>
+        </Modal>
+      )}
     </div>
   );
 };

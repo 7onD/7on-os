@@ -8,7 +8,19 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   const monthExpenses = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].expenses : 0;
   const hotLeads = D.CONTACTS.filter(c => c.status === 'hot');
 
+  const [calDay, setCalDay] = React.useState(18); // default to today
   const todayEvents = D.EVENTS.filter(e => e.day === 1).slice(0, 4);
+
+  // Tasks "due on selected day" — match by day number in due string
+  const calDayStr = String(calDay);
+  const allTasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || []);
+  const dayTasks = allTasks.filter(t => {
+    if (!t.due) return false;
+    const m = t.due.match(/(\d+)/);
+    return m && m[1] === calDayStr;
+  });
+  // Events for selected day
+  const calDayEvents = D.EVENTS.filter(e => e.day === calDay);
 
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
@@ -94,11 +106,16 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Календарь</div>
             <button className="card-link" onClick={() => setRoute('calendar')}>открыть →</button>
           </div>
-          <MiniCal year={2026} month={4} today={18} eventDays={[...new Set(D.EVENTS.map(e => e.day + 17))]} />
+          <MiniCal year={2026} month={4} today={18}
+            eventDays={[...new Set(D.EVENTS.map(e => e.day))]}
+            selectedDay={calDay}
+            onDayClick={setCalDay} />
           <div style={{ marginTop: 16 }}>
-            <div className="stat-label" style={{ marginBottom: 8 }}>Сегодня</div>
-            {todayEvents.map((e, i) => (
-              <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < todayEvents.length - 1 ? '1px solid var(--border)' : 0 }}>
+            <div className="stat-label" style={{ marginBottom: 8 }}>
+              {calDay === 18 ? 'Сегодня' : `${calDay} мая`}
+            </div>
+            {calDayEvents.map((e, i) => (
+              <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50 }}>{formatTime(e.start)}</span>
                 <span style={{ fontSize: 12.5, flex: 1 }}>{e.title}</span>
                 <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'personal' ? 'cold' : 'warm'}`}>
@@ -106,7 +123,16 @@ const Dashboard = ({ D, setRoute, refresh }) => {
                 </span>
               </div>
             ))}
-            {todayEvents.length === 0 && <div className="placeholder" style={{ padding: 0 }}>Нет событий сегодня</div>}
+            {dayTasks.map((t, i) => (
+              <div key={t.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'center', borderBottom: i < dayTasks.length - 1 ? '1px solid var(--border)' : 0 }}>
+                <span className={`task-priority ${t.priority}`} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 12.5, flex: 1, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--text-faint)' : 'var(--text)' }}>{t.title}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{t.type === 'work' ? 'Работа' : t.type === 'study' ? 'Учёба' : 'Личное'}</span>
+              </div>
+            ))}
+            {calDayEvents.length === 0 && dayTasks.length === 0 && (
+              <div className="placeholder" style={{ padding: 0 }}>Нет событий и задач</div>
+            )}
           </div>
         </div>
 
