@@ -173,7 +173,7 @@ async function saveNotified(storToken, notified) {
   } catch {}
 }
 
-async function runReminderCheck(storToken) {
+async function runReminderCheck(storToken, { debug = false, force = false } = {}) {
   const ownerId = process.env.TG_OWNER_ID;
   if (!ownerId) return { ok: false, reason: 'TG_OWNER_ID not set' };
 
@@ -184,14 +184,15 @@ async function runReminderCheck(storToken) {
   ]);
 
   const now = new Date();
-  const WINDOW_MS = 5 * 60 * 1000; // 5-minute window to handle cron jitter
+  const WINDOW_MS = force ? Infinity : 5 * 60 * 1000;
   const msgs = [];
+  const debugInfo = debug ? { now: now.toISOString(), tasks: [], events: [] } : null;
 
   // Check events
   events.forEach(ev => {
     const mins = parseInt(ev.reminder ?? '-1');
     if (mins < 0 || ev.start_time === -1) return;
-    if (!ev.event_date) return; // skip legacy events without date
+    if (!ev.event_date) return;
 
     const [y, mo, d] = ev.event_date.split('-').map(Number);
     const evDate = new Date(y, mo - 1, d);
@@ -200,17 +201,14 @@ async function runReminderCheck(storToken) {
 
     const fireAt = new Date(evDate.getTime() - mins * 60000);
     const diff = now - fireAt;
-    if (diff >= 0 && diff < WINDOW_MS) {
-      const key = `ev_${ev.id}_${mins}`;
-      if (!notified[key]) {
-        const hh = `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`;
-        const when = mins === 0 ? 'начинается сейчас'
-          : mins < 60 ? `через ${mins} мин`
-          : mins === 60 ? 'через 1 час'
-          : mins >= 1440 ? 'завтра'
-          : `через ${Math.round(mins/60)} ч`;
-        msgs.push({ key, text: `📅 <b>${ev.title}</b>\n${ev.event_date} ${hh} · ${when}` });
-      }
+    const key = `ev_${ev.id}_${mins}`;
+
+    if (debugInfo) debugInfo.events.push({ id: ev.id, title: ev.title, event_date: ev.event_date, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[key] });
+
+    if (diff >= 0 && diff < WINDOW_MS && !notified[key]) {
+      const hh = `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`;
+      const when = mins === 0 ? 'начинается сейчас' : mins < 60 ? `через ${mins} мин` : mins === 60 ? 'через 1 час' : mins >= 1440 ? 'завтра' : `через ${Math.round(mins/60)} ч`;
+      msgs.push({ key, text: `📅 <b>${ev.title}</b>\n${ev.event_date} ${hh} · ${when}` });
     }
   });
 
@@ -222,7 +220,10 @@ async function runReminderCheck(storToken) {
 
     const due = (t.due || '').trim();
     const iso = due.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!iso) return; // only handle ISO dates (date-picker created tasks)
+    if (!iso) {
+      if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due, reminder: mins, skip: 'due not ISO format' });
+      return;
+    }
 
     const dueDate = new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]), 9, 0, 0);
     if (t.time && /^\d{1,2}:\d{2}$/.test(t.time)) {
@@ -232,30 +233,25 @@ async function runReminderCheck(storToken) {
 
     const fireAt = new Date(dueDate.getTime() - mins * 60000);
     const diff = now - fireAt;
-    if (diff >= 0 && diff < WINDOW_MS) {
-      const key = `task_${t.id}_${mins}`;
-      if (!notified[key]) {
-        const when = mins === 0 ? 'срок наступил'
-          : mins < 60 ? `через ${mins} мин`
-          : mins >= 1440 ? 'завтра'
-          : `через ${Math.round(mins/60)} ч`;
-        msgs.push({ key, text: `✅ <b>${t.title}</b>\n${when}` });
-      }
+    const key = `task_${t.id}_${mins}`;
+
+    if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[key] });
+
+    if (diff >= 0 && diff < WINDOW_MS && !notified[key]) {
+      const when = mins === 0 ? 'срок наступил' : mins < 60 ? `через ${mins} мин` : mins >= 1440 ? 'завтра' : `через ${Math.round(mins/60)} ч`;
+      msgs.push({ key, text: `✅ <b>${t.title}</b>\n${when}` });
     }
   });
 
   if (msgs.length > 0) {
-    await Promise.all(msgs.map(m =>
-      tgSend(ownerId, `🔔 Напоминание\n\n${m.text}`)
-    ));
+    await Promise.all(msgs.map(m => tgSend(ownerId, `🔔 Напоминание\n\n${m.text}`)));
     msgs.forEach(m => { notified[m.key] = Date.now(); });
-    // Prune entries older than 48 hours to keep file small
     const cutoff = Date.now() - 48 * 60 * 60 * 1000;
     Object.keys(notified).forEach(k => { if (notified[k] < cutoff) delete notified[k]; });
     await saveNotified(storToken, notified);
   }
 
-  return { ok: true, sent: msgs.length };
+  return { ok: true, sent: msgs.length, ...(debugInfo || {}) };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -285,7 +281,9 @@ module.exports.handler = async (event) => {
     // ── check-reminders: manual trigger / test ──────────────────────────────
     if (action === 'check-reminders') {
       const storToken = await getToken();
-      return reply(await runReminderCheck(storToken));
+      const debug = qs.debug === '1';
+      const force = qs.force === '1';
+      return reply(await runReminderCheck(storToken, { debug, force }));
     }
 
     // ── bot-setup: register Telegram webhook (call once) ─────────────────────
