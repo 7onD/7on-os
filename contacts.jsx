@@ -6,6 +6,9 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [showAdd, setShowAdd] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [showSchedule, setShowSchedule] = React.useState(false);
+  const [scheduleForm, setScheduleForm] = React.useState({ date: '', time: '10:00', reminder: '0', description: '' });
+  const [scheduleSaving, setScheduleSaving] = React.useState(false);
 
   const emptyForm = { name:'', phone:'', addr:'', params:'', last_contact:'', days_since:'0', status:'work', next:'', next_when:'', notes:'' };
   const [form, setForm] = React.useState(emptyForm);
@@ -70,6 +73,37 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     await refresh();
   };
 
+  const handleSchedule = async () => {
+    if (!cur || !scheduleForm.date || !scheduleForm.time) return;
+    setScheduleSaving(true);
+    try {
+      const d = new Date(scheduleForm.date + 'T00:00:00');
+      const dow = d.getDay();
+      const dayNum = dow === 0 ? 7 : dow;
+      const [h, m] = scheduleForm.time.split(':').map(Number);
+      const startFloat = h + m / 60;
+      const endFloat = Math.min(startFloat + 1, 19);
+      await createEvent({
+        day: dayNum, start: startFloat, end: endFloat,
+        title: `Контакт: ${cur.name}`, kind: 'contact',
+        description: scheduleForm.description,
+        reminder: parseInt(scheduleForm.reminder),
+        event_date: scheduleForm.date,
+      });
+      await updateContact(cur.id, { next_when: scheduleForm.date });
+      await refresh();
+      setShowSchedule(false);
+      setScheduleForm({ date: '', time: '10:00', reminder: '0', description: '' });
+    } finally { setScheduleSaving(false); }
+  };
+
+  const MONTHS_RU_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const fmtRuDate = (iso) => {
+    if (!iso) return '';
+    const [, m, d] = iso.split('-').map(Number);
+    return `${d} ${MONTHS_RU_SHORT[m - 1]}`;
+  };
+
   // NOTE: renderContactFormFields is a render-function (NOT a component — no <X />).
   // Defining it as a component inside ContactsPage would cause focus loss on each keystroke
   // because React would see a new function reference each render and remount the entire form.
@@ -111,6 +145,34 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         <Modal title="Редактировать контакт" onClose={() => setEditing(false)}
           onConfirm={handleSaveEdit} confirmLabel={saving ? 'Сохранение…' : 'Сохранить'} confirmDisabled={saving || !form.name.trim()}>
           {renderContactFormFields()}
+        </Modal>
+      )}
+      {showSchedule && cur && (
+        <Modal title={`Запланировать контакт: ${cur.name}`}
+          onClose={() => setShowSchedule(false)}
+          onConfirm={handleSchedule}
+          confirmLabel={scheduleSaving ? 'Сохранение…' : 'Запланировать'}
+          confirmDisabled={scheduleSaving || !scheduleForm.date || !scheduleForm.time}>
+          <div className="form-row">
+            <Field label="Дата">
+              <FInput type="date" value={scheduleForm.date}
+                onChange={e => setScheduleForm(f => ({ ...f, date: e.target.value }))} />
+            </Field>
+            <Field label="Время">
+              <FInput type="time" value={scheduleForm.time}
+                onChange={e => setScheduleForm(f => ({ ...f, time: e.target.value }))} />
+            </Field>
+          </div>
+          <Field label="Напоминание">
+            <FSelect value={scheduleForm.reminder}
+              onChange={e => setScheduleForm(f => ({ ...f, reminder: e.target.value }))}>
+              {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </FSelect>
+          </Field>
+          <Field label="Описание">
+            <FTextarea placeholder="Что обсудить, подготовить…" value={scheduleForm.description}
+              onChange={e => setScheduleForm(f => ({ ...f, description: e.target.value }))} />
+          </Field>
         </Modal>
       )}
 
@@ -248,6 +310,9 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <a href={`tel:${cur.phone}`} className="btn primary" style={{ flex:1, justifyContent:'center', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:7 }}>
                 <Icon name="phone" size={12} /> Позвонить
               </a>
+              <button className="btn" title="Запланировать" onClick={() => setShowSchedule(true)}>
+                <Icon name="calendar" size={12} />
+              </button>
               <button className="btn" onClick={startEdit}><Icon name="edit" size={12} /></button>
             </div>
           </div>

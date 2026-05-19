@@ -130,8 +130,9 @@ const Dashboard = ({ D, setRoute, refresh }) => {
               <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50 }}>{formatTime(e.start)}</span>
                 <span style={{ fontSize: 12.5, flex: 1 }}>{e.title}</span>
-                <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'personal' ? 'cold' : 'warm'}`}>
-                  {e.kind === 'deal' ? 'Сделка' : e.kind === 'work' ? 'Работа' : e.kind === 'personal' ? 'Личное' : 'Встреча'}
+                <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'personal' ? 'cold' : e.kind === 'contact' ? 'hot' : 'warm'}`}
+                  style={e.kind === 'contact' ? { background:'rgba(94,229,160,0.15)', color:'#5ee5a0', border:'1px solid rgba(94,229,160,0.3)' } : {}}>
+                  {e.kind === 'deal' ? 'Сделка' : e.kind === 'work' ? 'Работа' : e.kind === 'personal' ? 'Личное' : e.kind === 'contact' ? 'Контакт' : 'Встреча'}
                 </span>
               </div>
             ))}

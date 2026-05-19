@@ -26,8 +26,8 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const cellH = 64;
 
   const TAGS = D.CAL_TAGS || [];
-  const KIND_LABELS = Object.fromEntries(TAGS.map(t => [t.id, t.name]));
-  const KIND_COLORS = Object.fromEntries(TAGS.map(t => [t.id, t.color]));
+  const KIND_LABELS = { deal:'Сделка', work:'Работа', meeting:'Встреча', personal:'Личное', contact:'Контакт', ...Object.fromEntries(TAGS.map(t => [t.id, t.name])) };
+  const KIND_COLORS = { deal:'var(--violet)', work:'var(--accent)', meeting:'var(--orange)', personal:'var(--blue)', contact:'#5ee5a0', ...Object.fromEntries(TAGS.map(t => [t.id, t.color])) };
 
   const TAG_PALETTE = ['#d4ff4d','#b78cff','#ffb45e','#7aa7ff','#ff6b7a','#5ee5a0','#4ad7d1','#74c0fc','#ff9a3c','#f06595'];
 

@@ -238,6 +238,7 @@ const App = () => {
   const [query, setQuery] = useState('');
   const [storageTarget, setStorageTarget] = useState(null);
   const [pageNavTarget, setPageNavTarget] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const searchRef = useRef(null);
   const notifRef  = useRef(null);
@@ -255,9 +256,12 @@ const App = () => {
   }, []);
 
   const refresh = useCallback(async () => {
-    await loadAllData();
-    setOffline(window.SUPABASE_OK === false);
-    setD({ ...window.SEVEN_DATA });
+    setRefreshing(true);
+    try {
+      await loadAllData();
+      setOffline(window.SUPABASE_OK === false);
+      setD({ ...window.SEVEN_DATA });
+    } finally { setRefreshing(false); }
   }, []);
 
   const reconnect = async () => {
@@ -367,13 +371,25 @@ const App = () => {
               <div className="val tnum">{D.EVENTS.filter(e => e.day === 1).length} событий</div>
             </div>
           </div>
-          {/* Bell button — mobile only (topbar-actions is hidden on mobile) */}
+          {/* Refresh + Bell — mobile only (topbar-actions is hidden on mobile) */}
+          <button className="icon-btn notif-mobile-btn" title="Обновить данные" onClick={refresh} disabled={refreshing}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }}>
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
           <button className="icon-btn notif-mobile-btn" style={{ position:'relative' }}
             onClick={() => setShowNotif(s => !s)}>
             <Icon name="bell" size={16} />
           </button>
 
           <div className="topbar-actions">
+            <button className="icon-btn" title="Обновить данные" onClick={refresh} disabled={refreshing}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }}>
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </button>
             <button className="icon-btn" style={{ position:'relative' }}
               onClick={() => setShowNotif(s => !s)}>
               <Icon name="bell" size={15} />
@@ -410,7 +426,7 @@ const App = () => {
         const dueTasks = allTasks.filter(t => !t.done && t.due && (
           t.due.toLowerCase().startsWith('сегодня') || t.due.toLowerCase().startsWith('today')
         ));
-        const EV_COLORS = { deal:'var(--violet)', work:'var(--accent)', meeting:'var(--orange)', personal:'var(--blue)' };
+        const EV_COLORS = { deal:'var(--violet)', work:'var(--accent)', meeting:'var(--orange)', personal:'var(--blue)', contact:'#5ee5a0' };
         return (
           <div ref={notifRef} style={{
             position:'fixed', top:58, right:16, width:300, zIndex:500,
