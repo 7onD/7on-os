@@ -152,6 +152,42 @@ async function saveBotState(storToken, state) {
   } catch {}
 }
 
+// ── Parse task due date (ISO + Russian text) ─────────────────────────────────
+function parseServerDueDate(due, timeStr) {
+  if (!due) return null;
+  const s = due.toLowerCase().trim();
+  const now = new Date();
+  let d = null;
+
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    d = new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]), 9, 0, 0);
+  } else if (s.startsWith('сегодня') || s === 'today') {
+    d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+  } else if (s.startsWith('завтра') || s === 'tomorrow') {
+    const tmp = new Date(now); tmp.setDate(tmp.getDate() + 1);
+    d = new Date(tmp.getFullYear(), tmp.getMonth(), tmp.getDate(), 9, 0, 0);
+  } else {
+    const MONTH_MAP = { 'янв':0,'фев':1,'мар':2,'апр':3,'май':4,'мая':4,'июн':5,'июл':6,'авг':7,'сен':8,'окт':9,'ноя':10,'дек':11 };
+    for (const [key, mi] of Object.entries(MONTH_MAP)) {
+      if (s.includes(key)) {
+        const m = s.match(/(\d+)/);
+        if (m) { d = new Date(now.getFullYear(), mi, parseInt(m[1]), 9, 0, 0); break; }
+      }
+    }
+    if (!d) {
+      const dot = s.match(/(\d{1,2})\.(\d{1,2})/);
+      if (dot) d = new Date(now.getFullYear(), parseInt(dot[2]) - 1, parseInt(dot[1]), 9, 0, 0);
+    }
+  }
+
+  if (d && timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)) {
+    const [h, m] = timeStr.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+  }
+  return d;
+}
+
 // ── Server-side reminder check ────────────────────────────────────────────────
 async function getNotified(storToken) {
   try {
@@ -218,24 +254,17 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
     const mins = parseInt(t.reminder ?? '-1');
     if (mins < 0) return;
 
-    const due = (t.due || '').trim();
-    const iso = due.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!iso) {
-      if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due, reminder: mins, skip: 'due not ISO format' });
+    const dueDate = parseServerDueDate(t.due, t.time);
+    if (!dueDate) {
+      if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, reminder: mins, skip: 'cannot parse due date' });
       return;
-    }
-
-    const dueDate = new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]), 9, 0, 0);
-    if (t.time && /^\d{1,2}:\d{2}$/.test(t.time)) {
-      const [h, m] = t.time.split(':').map(Number);
-      dueDate.setHours(h, m, 0, 0);
     }
 
     const fireAt = new Date(dueDate.getTime() - mins * 60000);
     const diff = now - fireAt;
     const key = `task_${t.id}_${mins}`;
 
-    if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[key] });
+    if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[key] });
 
     if (diff >= 0 && diff < WINDOW_MS && !notified[key]) {
       const when = mins === 0 ? 'срок наступил' : mins < 60 ? `через ${mins} мин` : mins >= 1440 ? 'завтра' : `через ${Math.round(mins/60)} ч`;
