@@ -1168,6 +1168,7 @@ button {
   to   { opacity: 1; transform: scale(1)    translateY(0); }
 }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes spin    { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .content > * { animation: fadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1); }
 .card        { transition: box-shadow 0.18s, border-color 0.18s, background 0.18s; }
