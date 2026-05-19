@@ -424,7 +424,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
           <button className="btn" onClick={() => setMonthOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
-          <div className="mono" style={{ fontSize:14, fontWeight:500, minWidth:160, textAlign:'center' }}>
+          <div className="mono" style={{ fontSize:14, fontWeight:500, flex:1, textAlign:'center', minWidth:0 }}>
             {MONTHS_RU[month]} {year}
           </div>
           <button className="btn" onClick={() => setMonthOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>

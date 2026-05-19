@@ -1422,7 +1422,10 @@ button {
     height: auto;
     min-height: calc(100vh - 120px);
     margin: -14px -14px -24px;
+    overflow-x: hidden;
   }
+  /* prevent grid items from inflating beyond 1fr due to min-content */
+  .storage-pane { min-width: 0; overflow-x: hidden; }
   .storage-back-btn { display: grid !important; }
 
   /* Mobile screen switcher — show only active pane */
@@ -1458,5 +1461,8 @@ button {
   .cal-add-btn { width: 100%; justify-content: center; }
   .cal-date-label { font-size: 13px; }
   .cal-mobile-view-toggle { position: sticky; top: 0; z-index: 10; background: var(--bg); padding-bottom: 6px; }
+  .cal-mobile { overflow-x: hidden; max-width: 100%; }
+  /* prevent month grid cells from exceeding column width */
+  .cal-mobile [style*="repeat(7,1fr)"] > * { min-width: 0; overflow: hidden; }
 }
 
