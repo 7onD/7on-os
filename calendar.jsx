@@ -580,6 +580,18 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <button className="btn" style={{ color:'var(--red)', borderColor:'rgba(255,107,122,0.2)' }} onClick={handleDetailDelete} disabled={detailSaving}>
                 <Icon name="trash" size={12} /> Удалить
               </button>
+              {detailEvent && detailEvent.kind === 'contact' && (() => {
+                const m = (detailEvent.title || '').match(/^Контакт:\s*(.+)$/);
+                const name = m && m[1].trim();
+                const contact = name && D.CONTACTS && D.CONTACTS.find(c => c.name === name);
+                if (!contact) return null;
+                return (
+                  <button className="btn" style={{ color:'#5ee5a0', borderColor:'rgba(94,229,160,0.3)' }}
+                    onClick={() => { setDetailEvent(null); window.SEVEN_NAV && window.SEVEN_NAV('contacts', { kind: 'contact', id: contact.id }); }}>
+                    <Icon name="user" size={12} /> Контакт
+                  </button>
+                );
+              })()}
               <div style={{ flex:1 }} />
               <button className="btn ghost" onClick={() => setDetailEvent(null)}>Отмена</button>
               <button className="btn primary" onClick={handleDetailSave} disabled={detailSaving || !detailForm.title.trim()}>
