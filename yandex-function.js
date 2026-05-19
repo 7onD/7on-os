@@ -301,10 +301,13 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
 
   if (msgs.length > 0) {
     await Promise.all(msgs.map(m => tgSend(ownerId, `🔔 Напоминание\n\n${m.text}`)));
-    msgs.forEach(m => { notified[m.key] = Date.now(); });
-    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
-    Object.keys(notified).forEach(k => { if (notified[k] < cutoff) delete notified[k]; });
-    await saveNotified(storToken, notified);
+    // force=1 — только для теста, не сохраняем состояние чтобы не блокировать реальные уведомления
+    if (!force) {
+      msgs.forEach(m => { notified[m.key] = Date.now(); });
+      const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+      Object.keys(notified).forEach(k => { if (notified[k] < cutoff) delete notified[k]; });
+      await saveNotified(storToken, notified);
+    }
   }
 
   return { ok: true, sent: msgs.length, ...(debugInfo || {}) };
@@ -340,6 +343,13 @@ module.exports.handler = async (event) => {
       const debug = qs.debug === '1';
       const force = qs.force === '1';
       return reply(await runReminderCheck(storToken, { debug, force }));
+    }
+
+    // ── clear-notified: reset tg_notified.json (fix poisoned state after force=1 tests) ──
+    if (action === 'clear-notified') {
+      const storToken = await getToken();
+      await saveNotified(storToken, {});
+      return reply({ ok: true, cleared: true, message: 'tg_notified.json сброшен — уведомления снова будут приходить' });
     }
 
     // ── bot-setup: register Telegram webhook (call once) ─────────────────────
