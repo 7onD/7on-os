@@ -1286,6 +1286,24 @@ button {
 .editor-content li { margin: 2px 0; }
 .editor-content strong, .editor-content b { font-weight: 600; }
 .editor-content em, .editor-content i { font-style: italic; }
+.editor-content s, .editor-content strike { text-decoration: line-through; opacity: 0.6; }
+
+/* Todo list */
+.editor-content ul.todo-list { list-style: none; padding-left: 0; margin: 6px 0; }
+.editor-content li.todo-item { display: flex; align-items: flex-start; gap: 9px; margin: 3px 0; min-height: 1.7em; padding-left: 2px; }
+.editor-content .todo-check {
+  flex-shrink: 0; margin-top: 3px; width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid var(--text-faint); cursor: pointer; display: inline-block;
+  transition: background 0.15s, border-color 0.15s; position: relative;
+}
+.editor-content li.todo-item[data-done="true"] .todo-check {
+  background: var(--accent); border-color: var(--accent);
+}
+.editor-content li.todo-item[data-done="true"] .todo-check::after {
+  content: ''; position: absolute; left: 4px; top: 1.5px; width: 5px; height: 9px;
+  border: 2px solid #0a0a0a; border-top: none; border-left: none; transform: rotate(45deg);
+}
+.editor-content li.todo-item[data-done="true"] > *:not(.todo-check) { text-decoration: line-through; opacity: 0.45; }
 .slash-menu { position: absolute; z-index: 50; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); width: 320px; padding: 6px; max-height: 400px; overflow: auto; }
 .slash-section { font-family: var(--font-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); padding: 10px 10px 6px; }
 .slash-item { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 7px; cursor: pointer; background: transparent; border: 0; width: 100%; text-align: left; color: var(--text); }

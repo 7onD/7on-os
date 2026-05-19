@@ -100,6 +100,16 @@ const Icon = ({ name, size = 16, stroke = 1.6 }) => {
       return <svg {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>;
     case 'target':
       return <svg {...props}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
+    case 'archive':
+      return <svg {...props}><rect x="2" y="3" width="20" height="5" rx="1.5"/><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>;
+    case 'users':
+      return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case 'chart':
+      return <svg {...props}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><rect x="3" y="20" width="18" height="1" rx="0.5" fill="currentColor" stroke="none"/></svg>;
+    case 'strikethrough':
+      return <svg {...props}><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 20H7a3 3 0 0 1 0-6h7"/><line x1="4" y1="12" x2="20" y2="12"/></svg>;
+    case 'todo':
+      return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>;
     default:
       return <svg {...props}><circle cx="12" cy="12" r="9"/></svg>;
   }

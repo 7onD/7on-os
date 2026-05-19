@@ -150,6 +150,26 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     document.execCommand(cmd, false, val || null);
   };
 
+  const insertTodo = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand('insertHTML', false,
+      '<ul class="todo-list"><li class="todo-item" data-done="false"><span class="todo-check" contenteditable="false"></span> </li></ul><p><br></p>'
+    );
+  };
+
+  const handleEditorClick = (e) => {
+    const check = e.target.closest('.todo-check');
+    if (check) {
+      const li = check.closest('li.todo-item');
+      if (li) {
+        const done = li.getAttribute('data-done') === 'true';
+        li.setAttribute('data-done', String(!done));
+        handleEditorInput();
+      }
+    }
+  };
+
   const handleEditorInput = () => {
     if (!cur || !editorRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -429,8 +449,14 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
             <button className="editor-tool" title="Курсив (Ctrl+I)" onMouseDown={e=>{e.preventDefault();execFormat('italic');}}>
               <span style={{ fontStyle:'italic', fontSize:13, fontFamily:'Georgia, serif' }}>I</span>
             </button>
+            <button className="editor-tool" title="Зачёркнутый" onMouseDown={e=>{e.preventDefault();execFormat('strikeThrough');}}>
+              <Icon name="strikethrough" size={14} />
+            </button>
             <button className="editor-tool" title="Список" onMouseDown={e=>{e.preventDefault();execFormat('insertUnorderedList');}}>
               <Icon name="list" size={14} />
+            </button>
+            <button className="editor-tool" title="Список задач" onMouseDown={e=>{e.preventDefault();insertTodo();}}>
+              <Icon name="todo" size={14} />
             </button>
             <span className="sep" />
             <button className="editor-tool" data-on={cur.pinned?'1':'0'} onClick={handleTogglePin}
@@ -463,6 +489,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
               suppressContentEditableWarning
               className="editor-content"
               onInput={handleEditorInput}
+              onClick={handleEditorClick}
               onKeyDown={e => {
                 if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertHTML', false, '    '); }
               }}
