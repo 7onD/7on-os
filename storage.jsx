@@ -16,9 +16,6 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const [notes, setNotes]             = React.useState(D.NOTES || []);
   const [saving, setSaving]           = React.useState(false);
   const [newNoteTitle, setNewNoteTitle] = React.useState('');
-  const [pendingKind, setPendingKind] = React.useState('p');
-  const [slash, setSlash]             = React.useState(null);
-  const [newLine, setNewLine]         = React.useState('');
   const [uploading, setUploading]       = React.useState(false);
   const [uploadError, setUploadError]   = React.useState('');
   const [fileMenuPos, setFileMenuPos]   = React.useState(null); // { id, top, left }
@@ -31,7 +28,8 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const [savingFolder, setSavingFolder] = React.useState(false);
   const [showMoveNote, setShowMoveNote] = React.useState(false);
   const [moveNoteFolderId, setMoveNoteFolderId] = React.useState('');
-  const newlineRef   = React.useRef(null);
+  const editorRef    = React.useRef(null);
+  const saveTimerRef = React.useRef(null);
   const fileInputRef = React.useRef(null);
   const fileMenuRef  = React.useRef(null);
 
@@ -48,11 +46,11 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     if (!selectedNote && notes.length > 0) setSelectedNote(notes[0].id);
   }, [notes]);
 
-  // Clear draft input when switching notes
+  // Load note content into contenteditable when switching notes
   React.useEffect(() => {
-    setNewLine('');
-    setPendingKind('p');
-    setSlash(null);
+    if (!editorRef.current) return;
+    if (!cur) { editorRef.current.innerHTML = ''; return; }
+    editorRef.current.innerHTML = noteToHtml(cur.blocks);
   }, [selectedNote]);
 
   // External navigation (links from tasks/events)
@@ -126,112 +124,43 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     await refresh();
   };
 
-  const parseBlocks = raw => { if (Array.isArray(raw)) return raw; try { return JSON.parse(raw || '[]'); } catch { return []; } };
-  const curBlocks = cur ? parseBlocks(cur.blocks) : [];
-
-  const saveBlocks = async (blocks) => {
-    if (!cur) return;
-    const preview = blocks.find(b => b.kind === 'p')?.text?.slice(0, 80) || '';
-    setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, blocks } : n));
-    await updateNote(cur.id, { blocks: JSON.stringify(blocks), modified: nowStr(), preview });
+  // Convert legacy block JSON to HTML for the contenteditable editor
+  const noteToHtml = (raw) => {
+    if (!raw) return '';
+    if (typeof raw === 'string' && raw.trimStart().startsWith('<')) return raw;
+    try {
+      const blocks = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!Array.isArray(blocks) || !blocks.length) return '';
+      const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return blocks.map(b => {
+        if (b.kind === 'h1') return `<h1>${esc(b.text)}</h1>`;
+        if (b.kind === 'h2') return `<h2>${esc(b.text)}</h2>`;
+        if (b.kind === 'list') return `<ul>${(b.items||[]).map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`;
+        if (b.kind === 'check') return `<p>${b.checked?'☑ ':'☐ '}${esc(b.text)}</p>`;
+        const t = esc(b.text||'').replace(/\n/g,'<br>');
+        return `<p>${t||'<br>'}</p>`;
+      }).join('');
+    } catch {}
+    return typeof raw === 'string' ? `<p>${raw}</p>` : '';
   };
 
-  const toggleCheck = async (block) => {
-    await saveBlocks(curBlocks.map(b => b === block ? { ...b, checked: !b.checked } : b));
+  const execFormat = (cmd, val) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(cmd, false, val || null);
   };
 
-  const deleteBlock = async (index) => {
-    await saveBlocks(curBlocks.filter((_, i) => i !== index));
-  };
-
-  const updateBlock = async (index, newText) => {
-    const newBlocks = curBlocks.map((b, i) => {
-      if (i !== index) return b;
-      if (b.kind === 'p' || b.kind === 'h2') return { ...b, text: newText };
-      if (b.kind === 'list') return { ...b, items: newText.split('\n').filter(l => l.trim()) };
-      if (b.kind === 'check') return { ...b, text: newText };
-      return b;
-    });
-    await saveBlocks(newBlocks);
-  };
-
-  const openNoteById = (id) => { setMode('notes'); setSelectedNote(id); setMobileScreen('editor'); };
-
-  const onNewLineChange = e => {
-    const v = e.target.value;
-    const cursor = e.target.selectionStart;
-    setNewLine(v);
-    const lineStart = v.lastIndexOf('\n', cursor - 1) + 1;
-    const currentLine = v.slice(lineStart, cursor);
-    if (currentLine.startsWith('/')) {
-      const rect = newlineRef.current?.getBoundingClientRect();
-      const editorRect = document.querySelector('.editor-body')?.getBoundingClientRect();
-      if (rect && editorRect) setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: currentLine.slice(1) });
-    } else { setSlash(null); }
-  };
-
-  const pickItem = async ({ type, item }) => {
-    if (!cur) return;
-    const block = type === 'file' ? { kind: 'file', fileId: item.id } : { kind: 'note', noteId: item.id, title: item.title };
-    await saveBlocks([...curBlocks, block]);
-    setSlash(null); setNewLine('');
-    setTimeout(() => newlineRef.current?.focus(), 50);
-  };
-
-  const commitNewBlock = async (text) => {
-    const t = (text ?? newLine).trim();
-    if (!t) return;
-    let block;
-    if (pendingKind === 'list')       block = { kind: 'list',  items: [t] };
-    else if (pendingKind === 'check') block = { kind: 'check', text: t, checked: false };
-    else if (pendingKind === 'h2')    block = { kind: 'h2',    text: t };
-    else                              block = { kind: 'p',     text: t };
-    await saveBlocks([...curBlocks, block]);
-    setNewLine('');
-    if (pendingKind === 'h2') setPendingKind('p');
-    if (newlineRef.current) { newlineRef.current.style.height = 'auto'; }
-  };
-
-  const onNewLineKey = async e => {
-    if (slash) {
-      if (e.key === 'Escape') { setSlash(null); setNewLine(''); }
-      return;
-    }
-    if (e.key === 'Escape') { setSlash(null); setNewLine(''); setPendingKind('p'); return; }
-    // p mode: Enter = newline in textarea; Ctrl/Cmd+Enter = commit block
-    if (pendingKind === 'p') {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && newLine.trim()) {
-        e.preventDefault();
-        await commitNewBlock();
-      }
-      // plain Enter: textarea handles naturally (newline)
-    } else {
-      // h2 / list / check: Enter commits block
-      if (e.key === 'Enter' && !e.shiftKey && newLine.trim()) {
-        e.preventDefault();
-        await commitNewBlock();
-      }
-    }
-  };
-
-  const onNewLinePaste = async e => {
-    const text = e.clipboardData.getData('text');
-    if (!text.includes('\n')) return; // single-line — let browser handle
-    e.preventDefault();
-    // Split by paragraph breaks (double newline) → each paragraph = one block
-    const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
-    if (!paragraphs.length) return;
-    const prefix = newLine.trim();
-    const all = prefix ? [prefix + '\n' + paragraphs[0], ...paragraphs.slice(1)] : paragraphs;
-    const newBlocks = all.map(p => {
-      if (pendingKind === 'list')  return { kind: 'list',  items: p.split('\n').filter(Boolean) };
-      if (pendingKind === 'check') return { kind: 'check', text: p, checked: false };
-      if (pendingKind === 'h2')    return { kind: 'h2',    text: p };
-      return { kind: 'p', text: p };
-    });
-    await saveBlocks([...curBlocks, ...newBlocks]);
-    setNewLine('');
-    if (newlineRef.current) { newlineRef.current.style.height = 'auto'; }
+  const handleEditorInput = () => {
+    if (!cur || !editorRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      if (!editorRef.current || !cur) return;
+      const html = editorRef.current.innerHTML;
+      const preview = (editorRef.current.textContent || '').slice(0, 120).trim();
+      const mod = nowStr();
+      setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, blocks: html, modified: mod, preview } : n));
+      await updateNote(cur.id, { blocks: html, modified: mod, preview });
+    }, 800);
   };
 
   const onTitleChange = e => setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, title: e.target.value } : n));
@@ -489,28 +418,19 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
               onClick={() => setMobileScreen('list')}>
               <Icon name="arrow-left" size={14} />
             </button>
-            <button className="editor-tool" title="Заголовок H2"
-              data-on={pendingKind==='h2'?'1':'0'} onClick={() => setPendingKind(k=>k==='h2'?'p':'h2')}
+            <button className="editor-tool" title="Заголовок H1" onMouseDown={e=>{e.preventDefault();execFormat('formatBlock','h1');}}
+              style={{ fontFamily:'var(--font-mono)', fontWeight:800, fontSize:11 }}>H1</button>
+            <button className="editor-tool" title="Заголовок H2" onMouseDown={e=>{e.preventDefault();execFormat('formatBlock','h2');}}
               style={{ fontFamily:'var(--font-mono)', fontWeight:700, fontSize:11 }}>H2</button>
             <span className="sep" />
-            <button className="editor-tool" title="Список" data-on={pendingKind==='list'?'1':'0'}
-              onClick={() => setPendingKind(k=>k==='list'?'p':'list')}>
+            <button className="editor-tool" title="Жирный (Ctrl+B)" onMouseDown={e=>{e.preventDefault();execFormat('bold');}}>
+              <span style={{ fontWeight:700, fontSize:13, fontFamily:'var(--font-ui)' }}>B</span>
+            </button>
+            <button className="editor-tool" title="Курсив (Ctrl+I)" onMouseDown={e=>{e.preventDefault();execFormat('italic');}}>
+              <span style={{ fontStyle:'italic', fontSize:13, fontFamily:'Georgia, serif' }}>I</span>
+            </button>
+            <button className="editor-tool" title="Список" onMouseDown={e=>{e.preventDefault();execFormat('insertUnorderedList');}}>
               <Icon name="list" size={14} />
-            </button>
-            <button className="editor-tool" title="Чеклист" data-on={pendingKind==='check'?'1':'0'}
-              onClick={() => setPendingKind(k=>k==='check'?'p':'check')}>
-              <Icon name="check-square" size={14} />
-            </button>
-            <span className="sep" />
-            <button className="editor-tool" title="Прикрепить файл или заметку (/)"
-              onClick={() => {
-                setNewLine('/');
-                const rect = newlineRef.current?.getBoundingClientRect();
-                const editorRect = document.querySelector('.editor-body')?.getBoundingClientRect();
-                if (rect && editorRect) setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: '' });
-                setTimeout(() => newlineRef.current?.focus(), 50);
-              }}>
-              <Icon name="paperclip" size={14} />
             </button>
             <span className="sep" />
             <button className="editor-tool" data-on={cur.pinned?'1':'0'} onClick={handleTogglePin}
@@ -523,7 +443,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
             </button>
             <div className="grow" />
             <div className="editor-meta">
-              <span>{cur.modified}</span><span>·</span><span>{curBlocks.length} блоков</span>
+              <span>{cur.modified}</span>
             </div>
             <span className="sep" />
             <button className="editor-tool" onClick={() => handleDeleteNote(cur.id)}
@@ -531,37 +451,22 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
               <Icon name="trash" size={14} />
             </button>
           </div>
-          <div className="editor-body" style={{ position:'relative' }}>
+          <div className="editor-body">
             <input className="editor-title" value={cur.title}
               onChange={onTitleChange} onBlur={onTitleBlur} placeholder="Заголовок…" />
             <div className="editor-subtitle">
               Изменено: {cur.modified} · {NOTE_FOLDERS.find(f=>f.id===cur.folder)?.name||'Личное'}
             </div>
-            {curBlocks.map((b, i) => (
-              <NoteBlock key={selectedNote + '|' + i} block={b}
-                onOpenFile={setPreviewFile}
-                onToggleCheck={toggleCheck}
-                onOpenNote={openNoteById}
-                onDelete={() => deleteBlock(i)}
-                onUpdate={text => updateBlock(i, text)} />
-            ))}
-            <div className="editor-newline" style={{ position:'relative' }} ref={newlineRef}>
-              <textarea value={newLine} onChange={onNewLineChange} onKeyDown={onNewLineKey} onPaste={onNewLinePaste}
-                rows={1}
-                placeholder={
-                  pendingKind==='list'  ? 'Пункт списка… (Enter — добавить)'     :
-                  pendingKind==='check' ? 'Элемент чеклиста… (Enter — добавить)' :
-                  pendingKind==='h2'    ? 'Заголовок… (Enter — добавить)'        :
-                  'Введите текст… (Ctrl+Enter — добавить блок)'
-                }
-                style={{ flex:1, background:'transparent', border:0, outline:0, color:'var(--text)', fontSize:14.5, fontFamily:'var(--font-ui)', width:'100%', resize:'none', overflow:'hidden', lineHeight:1.65, padding:0, verticalAlign:'bottom', display:'block' }}
-                onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} />
-              {!newLine && <span className="hint">/</span>}
-            </div>
-            {slash && (
-              <SlashMenu query={slash.query} position={{ left:slash.left, top:slash.top }}
-                onPick={pickItem} onClose={() => { setSlash(null); setNewLine(''); }} />
-            )}
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              className="editor-content"
+              onInput={handleEditorInput}
+              onKeyDown={e => {
+                if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertHTML', false, '    '); }
+              }}
+            />
           </div>
         </>
       ) : (
