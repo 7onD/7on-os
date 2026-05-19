@@ -96,6 +96,21 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           {D.WORK_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
 
+        {/* Study tasks */}
+        <div className="card" style={{ gridColumn: 'span 4' }}>
+          <div className="card-header">
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              Учебные задачи <span className="count">{studyCount}</span>
+              <span className="tag" style={{ background:'rgba(122,167,255,0.12)', color:'var(--blue)', borderColor:'rgba(122,167,255,0.25)' }}>Учёба</span>
+            </div>
+            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {(D.STUDY_TASKS || []).slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />)}
+          </div>
+          {(D.STUDY_TASKS || []).length === 0 && <div className="placeholder">Нет задач</div>}
+        </div>
+
         {/* Mini calendar */}
         <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="card-header">
@@ -181,38 +196,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           {hotLeads.length === 0 && <div className="placeholder">Нет горячих лидов</div>}
         </div>
 
-        {/* Active deals */}
-        <div className="card" style={{ gridColumn: 'span 7' }}>
-          <div className="card-header">
-            <div className="card-title">Активные сделки <span className="count">{D.DEALS.length}</span></div>
-            <button className="card-link" onClick={() => setRoute('finance')}>детали →</button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {D.DEALS.map(d => (
-              <div key={d.id} className="deal" style={{ marginBottom: 0 }}>
-                <div className="deal-head">
-                  <div className="deal-name">{d.client}</div>
-                  <div className="deal-stage">{d.stage}</div>
-                </div>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{d.object}</div>
-                <div className="deal-amount"><span className="currency">₽</span>{d.amount.toLocaleString('ru-RU')}<span className="currency"> млн</span></div>
-                <div className="steps">
-                  {Array.from({ length: d.total }, (_, i) => (
-                    <div key={i} className="step" data-done={i < d.step ? '1' : '0'} />
-                  ))}
-                </div>
-                <div className="deal-meta">
-                  <span>комиссия ₽{(d.commission * 1000).toFixed(0)}k</span>
-                  <span>· к {fmtDate(d.expected)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          {D.DEALS.length === 0 && <div className="placeholder">Нет активных сделок</div>}
-        </div>
-
         {/* Goals */}
-        <div className="card" style={{ gridColumn: 'span 5' }}>
+        <div className="card" style={{ gridColumn: 'span 12' }}>
           <div className="card-header">
             <div className="card-title">Цели накоплений</div>
             <button className="card-link" onClick={() => setRoute('finance')}>все →</button>

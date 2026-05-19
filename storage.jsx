@@ -61,7 +61,9 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     onNavConsumed && onNavConsumed();
   }, [navTarget]);
 
-  const FOLDERS = D.FOLDERS || [];
+  const NOTE_FOLDERS = D.NOTE_FOLDERS || D.FOLDERS || [];
+  const FILE_FOLDERS = D.FILE_FOLDERS || D.FOLDERS || [];
+  const FOLDERS = mode === 'notes' ? NOTE_FOLDERS : FILE_FOLDERS;
   const FILES   = D.FILES   || [];
   const stats = typeof calcStorageUsed === 'function' ? calcStorageUsed() : { usedDisplay: '—', capDisplay: '—', pct: 0 };
 
@@ -82,6 +84,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const pinned    = filteredNotes.filter(n => n.pinned);
   const others    = filteredNotes.filter(n => !n.pinned);
   const folderCount = id => mode === 'notes' ? notes.filter(n => n.folder === id).length : FILES.filter(f => f.folder === id).length;
+  const DEFAULT_FOLDER_IDS = ['nf-personal','nf-work','nf-projects','f-deals','f-objects','f-docs','f-personal'];
 
   const nowStr = () => {
     const n = new Date();
@@ -95,7 +98,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     try {
       await createNote({
         title: newNoteTitle.trim(),
-        folder: folder !== 'all' && folder !== 'pinned' ? folder : 'f-personal',
+        folder: folder !== 'all' && folder !== 'pinned' ? folder : 'nf-personal',
         pinned: false, modified: nowStr(), preview: '', blocks: '[]',
       });
       await refresh();
@@ -134,15 +137,29 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     await saveBlocks(curBlocks.filter((_, i) => i !== index));
   };
 
+  const updateBlock = async (index, newText) => {
+    const newBlocks = curBlocks.map((b, i) => {
+      if (i !== index) return b;
+      if (b.kind === 'p' || b.kind === 'h2') return { ...b, text: newText };
+      if (b.kind === 'list') return { ...b, items: newText.split('\n').filter(l => l.trim()) };
+      if (b.kind === 'check') return { ...b, text: newText };
+      return b;
+    });
+    await saveBlocks(newBlocks);
+  };
+
   const openNoteById = (id) => { setMode('notes'); setSelectedNote(id); setMobileScreen('editor'); };
 
   const onNewLineChange = e => {
     const v = e.target.value;
+    const cursor = e.target.selectionStart;
     setNewLine(v);
-    if (v.startsWith('/')) {
+    const lineStart = v.lastIndexOf('\n', cursor - 1) + 1;
+    const currentLine = v.slice(lineStart, cursor);
+    if (currentLine.startsWith('/')) {
       const rect = newlineRef.current?.getBoundingClientRect();
       const editorRect = document.querySelector('.editor-body')?.getBoundingClientRect();
-      if (rect && editorRect) setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: v.slice(1) });
+      if (rect && editorRect) setSlash({ left: rect.left - editorRect.left, top: rect.bottom - editorRect.top + 6, query: currentLine.slice(1) });
     } else { setSlash(null); }
   };
 
@@ -154,20 +171,60 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     setTimeout(() => newlineRef.current?.focus(), 50);
   };
 
+  const commitNewBlock = async (text) => {
+    const t = (text ?? newLine).trim();
+    if (!t) return;
+    let block;
+    if (pendingKind === 'list')       block = { kind: 'list',  items: [t] };
+    else if (pendingKind === 'check') block = { kind: 'check', text: t, checked: false };
+    else if (pendingKind === 'h2')    block = { kind: 'h2',    text: t };
+    else                              block = { kind: 'p',     text: t };
+    await saveBlocks([...curBlocks, block]);
+    setNewLine('');
+    if (pendingKind === 'h2') setPendingKind('p');
+    if (newlineRef.current) { newlineRef.current.style.height = 'auto'; }
+  };
+
   const onNewLineKey = async e => {
-    if (e.key === 'Enter' && !slash && newLine.trim()) {
-      const text = newLine.trim();
-      let block;
-      if (pendingKind === 'list')       block = { kind: 'list',  items: [text] };
-      else if (pendingKind === 'check') block = { kind: 'check', text, checked: false };
-      else if (pendingKind === 'h2')    block = { kind: 'h2',    text };
-      else                              block = { kind: 'p',     text };
-      await saveBlocks([...curBlocks, block]);
-      setNewLine('');
-      // list and check stay active (sticky mode); h2 resets to paragraph
-      if (pendingKind === 'h2') setPendingKind('p');
+    if (slash) {
+      if (e.key === 'Escape') { setSlash(null); setNewLine(''); }
+      return;
     }
-    if (e.key === 'Escape') { setSlash(null); setNewLine(''); setPendingKind('p'); }
+    if (e.key === 'Escape') { setSlash(null); setNewLine(''); setPendingKind('p'); return; }
+    // p mode: Enter = newline in textarea; Ctrl/Cmd+Enter = commit block
+    if (pendingKind === 'p') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && newLine.trim()) {
+        e.preventDefault();
+        await commitNewBlock();
+      }
+      // plain Enter: textarea handles naturally (newline)
+    } else {
+      // h2 / list / check: Enter commits block
+      if (e.key === 'Enter' && !e.shiftKey && newLine.trim()) {
+        e.preventDefault();
+        await commitNewBlock();
+      }
+    }
+  };
+
+  const onNewLinePaste = async e => {
+    const text = e.clipboardData.getData('text');
+    if (!text.includes('\n')) return; // single-line — let browser handle
+    e.preventDefault();
+    // Split by paragraph breaks (double newline) → each paragraph = one block
+    const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    if (!paragraphs.length) return;
+    const prefix = newLine.trim();
+    const all = prefix ? [prefix + '\n' + paragraphs[0], ...paragraphs.slice(1)] : paragraphs;
+    const newBlocks = all.map(p => {
+      if (pendingKind === 'list')  return { kind: 'list',  items: p.split('\n').filter(Boolean) };
+      if (pendingKind === 'check') return { kind: 'check', text: p, checked: false };
+      if (pendingKind === 'h2')    return { kind: 'h2',    text: p };
+      return { kind: 'p', text: p };
+    });
+    await saveBlocks([...curBlocks, ...newBlocks]);
+    setNewLine('');
+    if (newlineRef.current) { newlineRef.current.style.height = 'auto'; }
   };
 
   const onTitleChange = e => setNotes(prev => prev.map(n => n.id === cur.id ? { ...n, title: e.target.value } : n));
@@ -218,7 +275,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     if (!newFolderName.trim()) return;
     setSavingFolder(true);
     try {
-      await createFolder({ name: newFolderName.trim(), icon: newFolderIcon, color: newFolderColor });
+      await createFolder({ name: newFolderName.trim(), icon: newFolderIcon, color: newFolderColor, kind: mode });
       await refresh();
       setShowNewFolder(false);
       setNewFolderName('');
@@ -334,7 +391,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
                 <span style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.name}</span>
                 <span className="cnt">{folderCount(f.id)}</span>
               </button>
-              {!['f-deals','f-objects','f-docs','f-personal'].includes(f.id) && (
+              {!DEFAULT_FOLDER_IDS.includes(f.id) && (
                 <button className="icon-btn" style={{ width:24, height:24, flexShrink:0, opacity:0.4, marginRight:4 }}
                   title="Удалить папку"
                   onClick={e => { e.stopPropagation(); handleDeleteFolder(f); }}>
@@ -374,7 +431,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
           <input placeholder="Поиск…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
-      <div className="storage-pane-body">
+      <div className="storage-pane-body" style={{ overflowAnchor: 'none' }}>
         {pinned.length > 0 && (
           <>
             <div className="note-section-label"><Icon name="pin" size={9} />&nbsp;Закреплённые</div>
@@ -480,24 +537,27 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
             <input className="editor-title" value={cur.title}
               onChange={onTitleChange} onBlur={onTitleBlur} placeholder="Заголовок…" />
             <div className="editor-subtitle">
-              Изменено: {cur.modified} · {FOLDERS.find(f=>f.id===cur.folder)?.name||'Личное'}
+              Изменено: {cur.modified} · {NOTE_FOLDERS.find(f=>f.id===cur.folder)?.name||'Личное'}
             </div>
             {curBlocks.map((b, i) => (
               <NoteBlock key={i} block={b}
                 onOpenFile={setPreviewFile}
                 onToggleCheck={toggleCheck}
                 onOpenNote={openNoteById}
-                onDelete={() => deleteBlock(i)} />
+                onDelete={() => deleteBlock(i)}
+                onUpdate={text => updateBlock(i, text)} />
             ))}
             <div className="editor-newline" style={{ position:'relative' }} ref={newlineRef}>
-              <input type="text" value={newLine} onChange={onNewLineChange} onKeyDown={onNewLineKey}
+              <textarea value={newLine} onChange={onNewLineChange} onKeyDown={onNewLineKey} onPaste={onNewLinePaste}
+                rows={1}
                 placeholder={
-                  pendingKind==='list'  ? 'Пункт списка…'     :
-                  pendingKind==='check' ? 'Элемент чеклиста…' :
-                  pendingKind==='h2'    ? 'Заголовок…'        :
-                  'Введите текст или «/» для ссылки'
+                  pendingKind==='list'  ? 'Пункт списка… (Enter — добавить)'     :
+                  pendingKind==='check' ? 'Элемент чеклиста… (Enter — добавить)' :
+                  pendingKind==='h2'    ? 'Заголовок… (Enter — добавить)'        :
+                  'Введите текст… (Ctrl+Enter — добавить блок)'
                 }
-                style={{ flex:1, background:'transparent', border:0, outline:0, color:'var(--text)', fontSize:14.5, fontFamily:'var(--font-ui)', width:'100%' }} />
+                style={{ flex:1, background:'transparent', border:0, outline:0, color:'var(--text)', fontSize:14.5, fontFamily:'var(--font-ui)', width:'100%', resize:'none', overflow:'hidden', lineHeight:1.65, padding:0, verticalAlign:'bottom', display:'block' }}
+                onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} />
               {!newLine && <span className="hint">/</span>}
             </div>
             {slash && (
@@ -638,13 +698,13 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
           confirmDisabled={!moveNoteFolderId || moveNoteFolderId === cur.folder}>
           <Field label="Папка">
             <FSelect value={moveNoteFolderId} onChange={e => setMoveNoteFolderId(e.target.value)}>
-              {FOLDERS.map(f => (
+              {NOTE_FOLDERS.map(f => (
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </FSelect>
           </Field>
           <div style={{ fontSize:12, color:'var(--text-faint)', marginTop:8, fontFamily:'var(--font-mono)' }}>
-            Сейчас: {FOLDERS.find(f => f.id === cur.folder)?.name || 'Личное'}
+            Сейчас: {NOTE_FOLDERS.find(f => f.id === cur.folder)?.name || 'Личное'}
           </div>
         </Modal>
       )}

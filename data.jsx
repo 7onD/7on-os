@@ -32,7 +32,12 @@ async function loadAllData() {
     ]);
 
   // Default folders (shown when API returns empty)
-  const DEFAULT_FOLDERS = [
+  const DEFAULT_NOTE_FOLDERS = [
+    { id: 'nf-personal', name: 'Личное',    icon: 'star',      color: '#ffb45e' },
+    { id: 'nf-work',     name: 'Работа',    icon: 'briefcase', color: '#b78cff' },
+    { id: 'nf-projects', name: 'Проекты',   icon: 'archive',   color: '#7aa7ff' },
+  ];
+  const DEFAULT_FILE_FOLDERS = [
     { id: 'f-deals',    name: 'Сделки',     icon: 'briefcase', color: '#b78cff' },
     { id: 'f-objects',  name: 'Объекты',    icon: 'home',      color: '#d4ff4d' },
     { id: 'f-docs',     name: 'Документы',  icon: 'file',      color: '#7aa7ff' },
@@ -53,7 +58,13 @@ async function loadAllData() {
     EVENTS: events.map(e => ({ ...e, start: e.start_time, end: e.end_time })),
     NOTES: notes.map(n => ({ ...n, pinned: !!n.pinned, blocks: n.blocks })),
     FILES: files,   // real uploaded files; storage-data.jsx adds demo fallback
-    FOLDERS: folders.length > 0 ? folders : DEFAULT_FOLDERS,
+    FOLDERS: folders,
+    NOTE_FOLDERS: folders.filter(f => f.id.startsWith('nf-')).length > 0
+      ? folders.filter(f => f.id.startsWith('nf-'))
+      : DEFAULT_NOTE_FOLDERS,
+    FILE_FOLDERS: folders.filter(f => !f.id.startsWith('nf-')).length > 0
+      ? folders.filter(f => !f.id.startsWith('nf-'))
+      : DEFAULT_FILE_FOLDERS,
     CAL_TAGS: cal_tags,
     STATUS_LABEL,
   };
@@ -119,8 +130,9 @@ async function updateEvent(id, updates) {
 async function deleteEvent(id) { await apiDel('events', id); }
 
 // ── FOLDERS ───────────────────────────────────────────────────────────────────
-async function createFolder({ name, icon, color }) {
-  const id = 'f-' + Date.now();
+async function createFolder({ name, icon, color, kind = 'files' }) {
+  const prefix = kind === 'notes' ? 'nf-' : 'f-';
+  const id = prefix + Date.now();
   await apiPost('folders', { id, name, icon: icon || 'folder', color: color || '#7aa7ff' });
   return id;
 }

@@ -126,7 +126,6 @@ const ContactsPage = ({ D, refresh }) => {
             {[['all','Все',D.CONTACTS.length],['hot','Горячие',D.CONTACTS.filter(c=>c.status==='hot').length],
               ['work','В работе',D.CONTACTS.filter(c=>c.status==='work').length],
               ['warm','Тёплые',D.CONTACTS.filter(c=>c.status==='warm').length],
-              ['cold','Холодные',D.CONTACTS.filter(c=>c.status==='cold').length]
             ].map(([id,label,num]) => (
               <button key={id} className="filter" data-on={filter===id?'1':'0'} onClick={() => setFilter(id)}>
                 {id !== 'all' && <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, background: id==='hot'?'var(--red)':id==='work'?'var(--accent)':id==='warm'?'var(--orange)':'var(--blue)' }} />}

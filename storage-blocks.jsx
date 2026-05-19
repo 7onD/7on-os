@@ -56,37 +56,100 @@ const NotePill = ({ noteId, title, onOpen, onDelete }) => {
 };
 
 // ── Note block renderer ──────────────────────────────────────────────────────
-const NoteBlock = ({ block, onOpenFile, onToggleCheck, onOpenNote, onDelete }) => {
+const NoteBlock = ({ block, onOpenFile, onToggleCheck, onOpenNote, onDelete, onUpdate }) => {
+  const [editing, setEditing] = _useState(false);
+  const [editVal, setEditVal] = _useState('');
+  const editRef = _useRef(null);
+
+  const startEdit = (text) => {
+    setEditVal(text);
+    setEditing(true);
+    setTimeout(() => {
+      if (editRef.current) {
+        editRef.current.focus();
+        editRef.current.style.height = 'auto';
+        editRef.current.style.height = editRef.current.scrollHeight + 'px';
+      }
+    }, 10);
+  };
+
+  const commitEdit = () => {
+    setEditing(false);
+    if (onUpdate && editVal.trim() !== (block.text || (block.items || []).join('\n'))) {
+      onUpdate(editVal);
+    }
+  };
+
+  const editInputStyle = {
+    width: '100%', background: 'transparent', border: 'none',
+    outline: '1.5px solid var(--accent)', borderRadius: 4, padding: '2px 6px',
+    color: 'var(--text)', fontFamily: 'var(--font-ui)', resize: 'none',
+    overflow: 'hidden', lineHeight: 1.65,
+  };
+
   switch (block.kind) {
     case 'h2':
       return (
         <div className="block block-h2-wrap">
-          <div className="block-h2">{block.text}</div>
+          {editing ? (
+            <input ref={editRef} value={editVal}
+              onChange={e => setEditVal(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); commitEdit(); } }}
+              style={{ ...editInputStyle, fontWeight: 700, fontSize: 16 }} />
+          ) : (
+            <div className="block-h2" onClick={() => startEdit(block.text)} style={{ cursor: 'text' }}>{block.text}</div>
+          )}
           {onDelete && <button className="block-del" onClick={onDelete}><Icon name="x" size={11} /></button>}
         </div>
       );
     case 'p':
       return (
         <div className="block block-p-wrap">
-          <div className="block-p">{block.text}</div>
+          {editing ? (
+            <textarea ref={editRef} value={editVal}
+              onChange={e => { setEditVal(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+              onBlur={commitEdit}
+              onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); commitEdit(); } }}
+              style={{ ...editInputStyle, fontSize: 14 }} />
+          ) : (
+            <div className="block-p" onClick={() => startEdit(block.text)}
+              style={{ cursor: 'text', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{block.text}</div>
+          )}
           {onDelete && <button className="block-del" onClick={onDelete}><Icon name="x" size={11} /></button>}
         </div>
       );
     case 'list':
       return (
         <div className="block block-list-wrap">
-          <ul className="block-list">
-            {(block.items || []).map((it, i) => <li key={i}>{it}</li>)}
-          </ul>
+          {editing ? (
+            <textarea ref={editRef} value={editVal}
+              onChange={e => { setEditVal(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+              onBlur={() => { setEditing(false); if (onUpdate) onUpdate(editVal); }}
+              onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setEditing(false); if (onUpdate) onUpdate(editVal); } }}
+              style={{ ...editInputStyle, fontSize: 13 }} />
+          ) : (
+            <ul className="block-list" onClick={() => startEdit((block.items || []).join('\n'))} style={{ cursor: 'text' }}>
+              {(block.items || []).map((it, i) => <li key={i}>{it}</li>)}
+            </ul>
+          )}
           {onDelete && <button className="block-del" onClick={onDelete}><Icon name="x" size={11} /></button>}
         </div>
       );
     case 'check':
       return (
         <div className="block block-check-wrap">
-          <div className="block-check" data-done={block.checked ? '1' : '0'} onClick={() => onToggleCheck && onToggleCheck(block)}>
-            <span className="chk" />
-            <span className="txt">{block.text}</span>
+          <div className="block-check" data-done={block.checked ? '1' : '0'}>
+            <span className="chk" onClick={() => onToggleCheck && onToggleCheck(block)} style={{ cursor: 'pointer', flexShrink: 0 }} />
+            {editing ? (
+              <input ref={editRef} value={editVal}
+                onChange={e => setEditVal(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); commitEdit(); } }}
+                style={{ ...editInputStyle, fontSize: 13, flex: 1 }} />
+            ) : (
+              <span className="txt" onClick={() => startEdit(block.text)} style={{ cursor: 'text' }}>{block.text}</span>
+            )}
           </div>
           {onDelete && <button className="block-del" onClick={onDelete}><Icon name="x" size={11} /></button>}
         </div>
