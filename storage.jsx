@@ -48,6 +48,13 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     if (!selectedNote && notes.length > 0) setSelectedNote(notes[0].id);
   }, [notes]);
 
+  // Clear draft input when switching notes
+  React.useEffect(() => {
+    setNewLine('');
+    setPendingKind('p');
+    setSlash(null);
+  }, [selectedNote]);
+
   // External navigation (links from tasks/events)
   React.useEffect(() => {
     if (!navTarget) return;
@@ -531,7 +538,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
               Изменено: {cur.modified} · {NOTE_FOLDERS.find(f=>f.id===cur.folder)?.name||'Личное'}
             </div>
             {curBlocks.map((b, i) => (
-              <NoteBlock key={i} block={b}
+              <NoteBlock key={selectedNote + '|' + i} block={b}
                 onOpenFile={setPreviewFile}
                 onToggleCheck={toggleCheck}
                 onOpenNote={openNoteById}
