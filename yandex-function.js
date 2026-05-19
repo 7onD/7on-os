@@ -58,8 +58,12 @@ function parseBody(event) {
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
-// ── Telegram Bot helpers ──────────────────────────────────────────────────────
+// ── Telegram Bot API ──────────────────────────────────────────────────────────
 function tgApi(method, body) {
   const token = process.env.TG_BOT_TOKEN;
   if (!token) return Promise.resolve(null);
@@ -70,26 +74,82 @@ function tgApi(method, body) {
   }).then(r => r.json());
 }
 
-// Send message to owner (chat_id stored in TG_OWNER_ID)
-async function tgSend(text, chatId) {
-  const id = chatId || process.env.TG_OWNER_ID;
-  if (!id) return;
-  await tgApi('sendMessage', { chat_id: id, text, parse_mode: 'HTML' });
+// Persistent reply keyboard (shown instead of regular keyboard)
+const MAIN_KB = {
+  keyboard: [
+    ['📋 Задачи', '📅 Сегодня'],
+    ['👥 Контакты', '📝 Заметка'],
+  ],
+  resize_keyboard: true,
+  persistent: true,
+};
+
+// Inline keyboard for tasks menu (attached to message)
+const KB_TASKS = {
+  inline_keyboard: [
+    [
+      { text: '➕ Рабочая',  callback_data: 'new_task_work'     },
+      { text: '➕ Личная',   callback_data: 'new_task_personal' },
+      { text: '➕ Учебная',  callback_data: 'new_task_study'    },
+    ],
+    [
+      { text: '📋 Список открытых задач', callback_data: 'list_tasks' },
+    ],
+  ],
+};
+
+async function tgSend(chatId, text, opts = {}) {
+  return tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...opts });
 }
 
-function todayIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+async function tgEdit(chatId, messageId, text, opts = {}) {
+  return tgApi('editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', ...opts });
 }
 
-// Parse Telegram webhook update → { chatId, text } or null
+async function tgAnswer(callbackId, text = '') {
+  return tgApi('answerCallbackQuery', { callback_query_id: callbackId, text });
+}
+
+// Parse incoming Telegram update — returns { type, chatId, ... } or null
 function parseTgUpdate(body) {
+  if (body?.callback_query) {
+    const cq = body.callback_query;
+    return {
+      type: 'callback',
+      chatId: String(cq.message?.chat?.id || ''),
+      callbackId: cq.id,
+      data: cq.data || '',
+      messageId: cq.message?.message_id,
+    };
+  }
   const msg = body?.message || body?.edited_message;
   if (!msg) return null;
   return {
+    type: 'message',
     chatId: String(msg.chat?.id || ''),
     text: (msg.text || '').trim(),
   };
+}
+
+// ── Bot conversation state (persisted in Object Storage) ─────────────────────
+async function getBotState(storToken) {
+  try {
+    const r = await fetch(`https://storage.yandexcloud.net/${BUCKET}/bot_state.json`, {
+      headers: { Authorization: `Bearer ${storToken}` },
+    });
+    if (r.status === 404) return {};
+    return await r.json();
+  } catch { return {}; }
+}
+
+async function saveBotState(storToken, state) {
+  try {
+    await fetch(`https://storage.yandexcloud.net/${BUCKET}/bot_state.json`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${storToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    });
+  } catch {}
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -111,7 +171,7 @@ module.exports.handler = async (event) => {
       if (!funcUrl) return reply({ error: 'FUNCTION_URL not set' }, 500);
       const res = await tgApi('setWebhook', {
         url: `${funcUrl}?action=bot`,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: true,
       });
       return reply({ ok: true, tg: res });
@@ -123,77 +183,174 @@ module.exports.handler = async (event) => {
       const upd  = parseTgUpdate(body);
       if (!upd) return reply({ ok: true });
 
-      const { chatId, text } = upd;
+      const { chatId } = upd;
 
       // Security: only owner can use bot
       const ownerId = process.env.TG_OWNER_ID;
       if (ownerId && chatId !== ownerId) {
-        await tgSend('⛔ Доступ запрещён.', chatId);
+        if (upd.type === 'callback') await tgAnswer(upd.callbackId, '⛔ Доступ запрещён');
+        else await tgSend(chatId, '⛔ Доступ запрещён.');
         return reply({ ok: true });
       }
 
       const storToken = await getToken();
+      const allState  = await getBotState(storToken);
+      const userState = allState[chatId] || {};
 
-      // ── /task или /t — рабочая задача ─────────────────────────────────────
-      if (/^\/task\b|^\/t\b/i.test(text)) {
-        const title = text.replace(/^\/task\s*|^\/t\s*/i, '').trim();
-        if (!title) { await tgSend('✏️ Укажи название:\n/task Позвонить Иванову', chatId); return reply({ ok: true }); }
-        const tasks = await getTable(storToken, 'tasks');
-        tasks.push({ id: 'w' + Date.now(), title, type: 'work', priority: 'med', done: 0, due: '', time: '', tag: 'Риэлтор', description: '📱 Из Telegram', reminder: -1 });
-        await saveTable(storToken, 'tasks', tasks);
-        await tgSend(`✅ Рабочая задача создана:\n<b>${title}</b>`, chatId);
+      // ── Callback query (inline button press) ─────────────────────────────
+      if (upd.type === 'callback') {
+        const { callbackId, data, messageId } = upd;
+        await tgAnswer(callbackId);
+
+        // ➕ New task buttons
+        if (['new_task_work', 'new_task_personal', 'new_task_study'].includes(data)) {
+          const prompts = {
+            new_task_work:     '💼 рабочую',
+            new_task_personal: '🏠 личную',
+            new_task_study:    '📚 учебную',
+          };
+          const waitKey = {
+            new_task_work:     'task_work',
+            new_task_personal: 'task_personal',
+            new_task_study:    'task_study',
+          };
+          allState[chatId] = { waiting: waitKey[data] };
+          await saveBotState(storToken, allState);
+          await tgEdit(chatId, messageId,
+            `✏️ Введи название <b>${prompts[data]}</b> задачи:\n\n<i>/cancel — отмена</i>`);
+          return reply({ ok: true });
+        }
+
+        // 📋 List open tasks
+        if (data === 'list_tasks') {
+          const tasks = await getTable(storToken, 'tasks');
+          const open  = tasks.filter(t => !t.done);
+          if (!open.length) {
+            await tgEdit(chatId, messageId, '📋 Открытых задач нет ✅');
+            return reply({ ok: true });
+          }
+          const work     = open.filter(t => t.type === 'work');
+          const personal = open.filter(t => t.type === 'personal');
+          const study    = open.filter(t => t.type === 'study');
+          const lines    = [`📋 Открытых задач: <b>${open.length}</b>`];
+          if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,8).forEach(t => lines.push(`  • ${t.title}`)); }
+          if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,8).forEach(t => lines.push(`  • ${t.title}`)); }
+          if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,8).forEach(t => lines.push(`  • ${t.title}`)); }
+          await tgEdit(chatId, messageId, lines.join('\n'));
+          return reply({ ok: true });
+        }
+
         return reply({ ok: true });
       }
 
-      // ── /p — личная задача ────────────────────────────────────────────────
-      if (/^\/p\b/i.test(text)) {
-        const title = text.replace(/^\/p\s*/i, '').trim();
-        if (!title) { await tgSend('✏️ Укажи название:\n/p Купить продукты', chatId); return reply({ ok: true }); }
-        const tasks = await getTable(storToken, 'tasks');
-        tasks.push({ id: 'p' + Date.now(), title, type: 'personal', priority: 'med', done: 0, due: '', time: '', tag: 'Личное', description: '📱 Из Telegram', reminder: -1 });
-        await saveTable(storToken, 'tasks', tasks);
-        await tgSend(`✅ Личная задача создана:\n<b>${title}</b>`, chatId);
+      // ── Text message ──────────────────────────────────────────────────────
+      const { text } = upd;
+
+      // /cancel — abort any pending input
+      if (/^\/cancel\b/i.test(text)) {
+        if (userState.waiting) {
+          delete allState[chatId];
+          await saveBotState(storToken, allState);
+          await tgSend(chatId, '❌ Отменено', { reply_markup: MAIN_KB });
+        } else {
+          await tgSend(chatId, '❌ Нечего отменять', { reply_markup: MAIN_KB });
+        }
         return reply({ ok: true });
       }
 
-      // ── /study — учебная задача ───────────────────────────────────────────
-      if (/^\/study\b/i.test(text)) {
-        const title = text.replace(/^\/study\s*/i, '').trim();
-        if (!title) { await tgSend('✏️ Укажи название:\n/study Прочитать главу', chatId); return reply({ ok: true }); }
-        const tasks = await getTable(storToken, 'tasks');
-        tasks.push({ id: 'e' + Date.now(), title, type: 'study', priority: 'med', done: 0, due: '', time: '', tag: 'Учёба', description: '📱 Из Telegram', reminder: -1 });
-        await saveTable(storToken, 'tasks', tasks);
-        await tgSend(`✅ Учебная задача создана:\n<b>${title}</b>`, chatId);
+      // ── Handle pending conversation state (multi-step input) ─────────────
+      if (userState.waiting) {
+        const { waiting } = userState;
+
+        // Waiting for task title
+        if (['task_work', 'task_personal', 'task_study'].includes(waiting)) {
+          const typeMap  = { task_work: 'work',    task_personal: 'personal', task_study: 'study'   };
+          const tagMap   = { task_work: 'Риэлтор', task_personal: 'Личное',   task_study: 'Учёба'   };
+          const idMap    = { task_work: 'w',        task_personal: 'p',        task_study: 'e'       };
+          const labelMap = { task_work: '💼 Рабочая', task_personal: '🏠 Личная', task_study: '📚 Учебная' };
+
+          const tasks = await getTable(storToken, 'tasks');
+          tasks.push({
+            id:          idMap[waiting] + Date.now(),
+            title:       text,
+            type:        typeMap[waiting],
+            priority:    'med',
+            done:        0,
+            due:         '',
+            time:        '',
+            tag:         tagMap[waiting],
+            description: '📱 Из Telegram',
+            reminder:    -1,
+          });
+          await saveTable(storToken, 'tasks', tasks);
+          delete allState[chatId];
+          await saveBotState(storToken, allState);
+          await tgSend(chatId,
+            `✅ ${labelMap[waiting]} задача создана:\n<b>${text}</b>`,
+            { reply_markup: MAIN_KB });
+          return reply({ ok: true });
+        }
+
+        // Waiting for note text
+        if (waiting === 'note') {
+          const notes = await getTable(storToken, 'notes');
+          const now   = new Date().toISOString();
+          notes.push({
+            id:      'n' + Date.now(),
+            title:   text.slice(0, 80),
+            content: text,
+            folder:  '',
+            pinned:  0,
+            created: now,
+            updated: now,
+          });
+          await saveTable(storToken, 'notes', notes);
+          delete allState[chatId];
+          await saveBotState(storToken, allState);
+          await tgSend(chatId,
+            `📝 Заметка сохранена:\n<b>${text.slice(0, 80)}</b>`,
+            { reply_markup: MAIN_KB });
+          return reply({ ok: true });
+        }
+      }
+
+      // ── Main navigation buttons ───────────────────────────────────────────
+
+      // 📋 Задачи
+      if (text === '📋 Задачи' || /^\/tasks?\b/i.test(text)) {
+        const tasks    = await getTable(storToken, 'tasks');
+        const open     = tasks.filter(t => !t.done);
+        const work     = open.filter(t => t.type === 'work').length;
+        const personal = open.filter(t => t.type === 'personal').length;
+        const study    = open.filter(t => t.type === 'study').length;
+        await tgSend(chatId,
+          `📋 <b>Задачи</b>\n\n` +
+          `💼 Рабочих: <b>${work}</b>\n` +
+          `🏠 Личных: <b>${personal}</b>\n` +
+          `📚 Учебных: <b>${study}</b>\n\n` +
+          `Всего открытых: <b>${open.length}</b>`,
+          { reply_markup: KB_TASKS });
         return reply({ ok: true });
       }
 
-      // ── /tasks — список открытых задач ───────────────────────────────────
-      if (/^\/tasks\b/i.test(text)) {
-        const tasks = await getTable(storToken, 'tasks');
-        const open  = tasks.filter(t => !t.done);
-        if (!open.length) { await tgSend('📋 Открытых задач нет', chatId); return reply({ ok: true }); }
-        const work     = open.filter(t => t.type === 'work');
-        const personal = open.filter(t => t.type === 'personal');
-        const study    = open.filter(t => t.type === 'study');
-        const lines = [`📋 Открытых задач: <b>${open.length}</b>`];
-        if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,7).forEach(t => lines.push(`  • ${t.title}`)); }
-        if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,7).forEach(t => lines.push(`  • ${t.title}`)); }
-        if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,7).forEach(t => lines.push(`  • ${t.title}`)); }
-        await tgSend(lines.join('\n'), chatId);
-        return reply({ ok: true });
-      }
-
-      // ── /today — события и задачи на сегодня ─────────────────────────────
-      if (/^\/today\b/i.test(text)) {
-        const iso    = todayIso();
-        const [events, tasks] = await Promise.all([getTable(storToken, 'events'), getTable(storToken, 'tasks')]);
-        const todayEvs  = events.filter(e => e.event_date === iso).sort((a, b) => a.start_time - b.start_time);
-        const todayTask = tasks.filter(t => !t.done && (t.due || '').toLowerCase().includes('сегодня'));
+      // 📅 Сегодня
+      if (text === '📅 Сегодня' || /^\/today\b/i.test(text)) {
+        const iso = todayIso();
+        const [events, tasks] = await Promise.all([
+          getTable(storToken, 'events'),
+          getTable(storToken, 'tasks'),
+        ]);
+        const todayEvs  = events
+          .filter(e => e.event_date === iso)
+          .sort((a, b) => (a.start_time ?? 99) - (b.start_time ?? 99));
+        const todayTask = tasks.filter(t =>
+          !t.done && (t.due === iso || (t.due || '').toLowerCase().includes('сегодня')));
         const lines = [`📅 <b>Сегодня, ${iso}</b>`];
         if (todayEvs.length) {
           lines.push('\n🗓 <b>События:</b>');
           todayEvs.forEach(e => {
-            const hh = e.start_time === -1 ? 'весь день' : `${String(Math.floor(e.start_time)).padStart(2,'0')}:00`;
+            const hh = e.start_time === -1 ? 'весь день'
+              : `${String(Math.floor(e.start_time)).padStart(2,'0')}:00`;
             lines.push(`  ${hh} — ${e.title}`);
           });
         }
@@ -202,33 +359,67 @@ module.exports.handler = async (event) => {
           todayTask.forEach(t => lines.push(`  • ${t.title}`));
         }
         if (!todayEvs.length && !todayTask.length) lines.push('\nНет событий и задач 🎉');
-        await tgSend(lines.join('\n'), chatId);
+        await tgSend(chatId, lines.join('\n'), { reply_markup: MAIN_KB });
         return reply({ ok: true });
       }
 
-      // ── /id — показать свой chat_id (для настройки) ───────────────────────
+      // 👥 Контакты
+      if (text === '👥 Контакты' || /^\/contacts?\b/i.test(text)) {
+        const contacts = await getTable(storToken, 'contacts');
+        const hot  = contacts.filter(c => c.status === 'hot');
+        const warm = contacts.filter(c => c.status === 'warm');
+        const work = contacts.filter(c => c.status === 'work');
+        const cold = contacts.filter(c => c.status === 'cold');
+        const lines = [`👥 <b>Контакты: ${contacts.length}</b>`, ''];
+        lines.push(`🔥 Горячих: <b>${hot.length}</b>`);
+        lines.push(`🌡 Тёплых: <b>${warm.length}</b>`);
+        lines.push(`💼 В работе: <b>${work.length}</b>`);
+        lines.push(`❄️ Холодных: <b>${cold.length}</b>`);
+        if (hot.length) {
+          lines.push('\n🔥 <b>Горячие лиды:</b>');
+          hot.slice(0, 7).forEach(c => {
+            lines.push(`  • <b>${c.name}</b>${c.addr ? ' · ' + c.addr : ''}`);
+            if (c.next) lines.push(`    → ${c.next}`);
+          });
+        }
+        await tgSend(chatId, lines.join('\n'), { reply_markup: MAIN_KB });
+        return reply({ ok: true });
+      }
+
+      // 📝 Заметка
+      if (text === '📝 Заметка' || /^\/note\b/i.test(text)) {
+        allState[chatId] = { waiting: 'note' };
+        await saveBotState(storToken, allState);
+        await tgSend(chatId,
+          '📝 Введи текст заметки:\n\n<i>/cancel — отмена</i>',
+          { reply_markup: MAIN_KB });
+        return reply({ ok: true });
+      }
+
+      // /id — show own chat_id (for initial setup)
       if (/^\/id\b/i.test(text)) {
-        await tgSend(`Твой chat_id: <code>${chatId}</code>\nДобавь его в переменную TG_OWNER_ID`, chatId);
+        await tgSend(chatId,
+          `Твой chat_id: <code>${chatId}</code>\nДобавь в переменную TG_OWNER_ID`,
+          { reply_markup: MAIN_KB });
         return reply({ ok: true });
       }
 
-      // ── /start или /help ──────────────────────────────────────────────────
+      // /start or /help
       if (/^\/start\b|^\/help\b/i.test(text)) {
-        await tgSend(
+        await tgSend(chatId,
           '🤖 <b>7on OS Bot</b>\n\n' +
-          '/task [название]  — рабочая задача\n' +
-          '/p [название]     — личная задача\n' +
-          '/study [название] — учебная задача\n' +
-          '/tasks            — все открытые задачи\n' +
-          '/today            — события и задачи на сегодня\n' +
-          '/id               — твой chat_id\n' +
-          '/help             — эта справка',
-          chatId,
-        );
+          'Используй кнопки внизу:\n\n' +
+          '📋 <b>Задачи</b> — создать или посмотреть задачи\n' +
+          '📅 <b>Сегодня</b> — события и задачи на сегодня\n' +
+          '👥 <b>Контакты</b> — контакты и горячие лиды\n' +
+          '📝 <b>Заметка</b> — сохранить заметку\n\n' +
+          '/cancel — отменить текущий ввод\n' +
+          '/id — твой chat_id',
+          { reply_markup: MAIN_KB });
         return reply({ ok: true });
       }
 
-      await tgSend('❓ Не понял. Напиши /help', chatId);
+      await tgSend(chatId, '❓ Используй кнопки внизу или /help', { reply_markup: MAIN_KB });
       return reply({ ok: true });
     }
 
