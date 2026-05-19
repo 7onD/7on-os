@@ -153,9 +153,22 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const insertTodo = () => {
     if (!editorRef.current) return;
     editorRef.current.focus();
+    const uid = `todo-${Date.now()}`;
     document.execCommand('insertHTML', false,
-      '<ul class="todo-list"><li class="todo-item" data-done="false"><span class="todo-check" contenteditable="false"></span> </li></ul><p><br></p>'
+      `<ul class="todo-list"><li id="${uid}" class="todo-item" data-done="false"><span class="todo-check" contenteditable="false"></span><span class="todo-body">​</span></li></ul>`
     );
+    const li = document.getElementById(uid);
+    if (li) {
+      li.removeAttribute('id');
+      const body = li.querySelector('.todo-body');
+      if (body) {
+        const range = document.createRange();
+        range.selectNodeContents(body);
+        range.collapse(false);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      }
+    }
   };
 
   const handleEditorClick = (e) => {
@@ -165,6 +178,14 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
       if (li) {
         const done = li.getAttribute('data-done') === 'true';
         li.setAttribute('data-done', String(!done));
+        const body = li.querySelector('.todo-body');
+        if (body) {
+          const range = document.createRange();
+          range.selectNodeContents(body);
+          range.collapse(false);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        }
         handleEditorInput();
       }
     }
