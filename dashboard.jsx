@@ -230,6 +230,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
 };
 
 function formatTime(t) {
+  if (t === -1) return 'весь день';
   const h = Math.floor(t);
   const m = Math.round((t - h) * 60);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;

@@ -139,7 +139,25 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     finally { setDetailSaving(false); }
   };
 
-  const handleDeleteFromGrid = async (id) => { await deleteEvent(id); await refresh(); };
+  const handleDeleteFromGrid = async (id) => {
+    if (!confirm('Удалить событие?')) return;
+    await deleteEvent(id); await refresh();
+  };
+
+  // Assign horizontal lanes to overlapping timed events
+  const layoutDayEvents = (events) => {
+    const sorted = [...events].sort((a, b) => a.start - b.start);
+    const laneEnds = [];
+    const result = [];
+    for (const ev of sorted) {
+      let lane = laneEnds.findIndex(end => end <= ev.start);
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(ev.end); }
+      else { laneEnds[lane] = ev.end; }
+      result.push({ ...ev, _lane: lane });
+    }
+    const total = laneEnds.length || 1;
+    return result.map(ev => ({ ...ev, _totalLanes: total }));
+  };
 
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
@@ -163,12 +181,18 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const renderEventBlock = (e, opts = {}) => {
-    const color  = KIND_COLORS[e.kind] || '#888888';
-    const top    = (e.start - HOURS[0]) * cellH + 4;
-    const height = Math.max((e.end - e.start) * cellH - 8, 24);
+    const color      = KIND_COLORS[e.kind] || '#888888';
+    const top        = (e.start - HOURS[0]) * cellH + 4;
+    const height     = Math.max((e.end - e.start) * cellH - 8, 24);
+    const lane       = e._lane ?? 0;
+    const total      = e._totalLanes ?? 1;
+    const pct        = 100 / total;
+    const laneStyle  = total > 1
+      ? { left:`calc(${lane * pct}% + 2px)`, width:`calc(${pct}% - 6px)`, right:'auto' }
+      : { left:2, right:2, width:'auto' };
     return (
       <div key={e.id} className="fcal-event"
-        style={{ top, height, cursor:'pointer', background:`${color}22`, borderLeftColor:color, color, ...(opts.style || {}) }}
+        style={{ top, height, cursor:'pointer', background:`${color}22`, borderLeftColor:color, color, ...laneStyle, ...(opts.style || {}) }}
         onClick={ev => openDetail(ev, e)}>
         <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{e.title}</div>
         <div className="when">{formatTime(e.start)} – {formatTime(e.end)}</div>
@@ -183,23 +207,46 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   // ── Week view ──────────────────────────────────────────────────────────────
   const renderWeekView = () => (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:16 }} className="cal-desktop">
-      <div className="fcal" style={{ gridTemplateRows:`auto repeat(${HOURS.length}, ${cellH}px)` }}>
+      <div className="fcal" style={{ gridTemplateRows:`auto auto repeat(${HOURS.length}, ${cellH}px)` }}>
         <div className="fcal-corner" />
         {DAYS.map(d => (
           <div key={d.num} className="fcal-dow" data-today={d.today ? '1' : '0'}>
             <span>{d.dow}</span><span className="num">{d.num}</span>
           </div>
         ))}
+        {/* All-day events row */}
+        <div className="fcal-hour" style={{ fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
+        {DAYS.map((d, di) => {
+          const allDay = D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start === -1);
+          return (
+            <div key={di} className="fcal-cell" style={{ minHeight:24, padding:'2px 3px', display:'flex', flexWrap:'wrap', gap:2, alignContent:'flex-start' }}>
+              {allDay.map(e => {
+                const color = KIND_COLORS[e.kind] || '#888';
+                return (
+                  <div key={e.id} style={{ background:`${color}22`, borderLeft:`2px solid ${color}`, color, borderRadius:3, padding:'1px 5px', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%', cursor:'pointer' }}
+                    onClick={ev => openDetail(ev, e)}>
+                    {e.title}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
         {HOURS.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="fcal-hour">{String(h).padStart(2,'0')}:00</div>
-            {DAYS.map((d, di) => (
-              <div key={di} className="fcal-cell"
-                style={{ position:'relative', cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
-                onClick={() => openSlot(di, h)}>
-                {hi === 0 && D.EVENTS.filter(e => eventMatchesDay(e, di)).map(e => renderEventBlock(e))}
-              </div>
-            ))}
+            {DAYS.map((d, di) => {
+              const timedEvs = hi === 0
+                ? layoutDayEvents(D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start !== -1))
+                : [];
+              return (
+                <div key={di} className="fcal-cell"
+                  style={{ position:'relative', cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
+                  onClick={() => openSlot(di, h)}>
+                  {timedEvs.map(e => renderEventBlock(e))}
+                </div>
+              );
+            })}
           </React.Fragment>
         ))}
       </div>
@@ -285,7 +332,8 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   // ── Day view ───────────────────────────────────────────────────────────────
   const renderDayView = () => {
     const day = DAYS[viewDayIdx];
-    const dayEvents = D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx));
+    const allDayEvs  = D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start === -1);
+    const timedEvs   = layoutDayEvents(D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start !== -1));
     return (
       <div style={{ display:'grid', gridTemplateColumns:'60px 1fr', gap:0 }} className="cal-desktop">
         <div />
@@ -303,6 +351,23 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             <Icon name="chevron-right" size={13} />
           </button>
         </div>
+        {/* All-day row for day view */}
+        {allDayEvs.length > 0 && (
+          <>
+            <div className="fcal-hour" style={{ fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
+            <div className="fcal-cell" style={{ padding:'4px 6px', display:'flex', flexWrap:'wrap', gap:4 }}>
+              {allDayEvs.map(e => {
+                const color = KIND_COLORS[e.kind] || '#888';
+                return (
+                  <div key={e.id} style={{ background:`${color}22`, borderLeft:`2px solid ${color}`, color, borderRadius:3, padding:'2px 8px', fontSize:11, cursor:'pointer' }}
+                    onClick={ev => openDetail(ev, e)}>
+                    {e.title}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
         {HOURS.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="fcal-hour" style={{ display:'flex', alignItems:'flex-start', paddingTop:8, height:cellH, boxSizing:'border-box' }}>
@@ -311,7 +376,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             <div className="fcal-cell"
               style={{ position:'relative', height:cellH, cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
               onClick={() => openSlot(viewDayIdx, h)}>
-              {hi === 0 && dayEvents.map(e => renderEventBlock(e, { style: { left:4, right:4, width:'auto' } }))}
+              {hi === 0 && timedEvs.map(e => renderEventBlock(e))}
             </div>
           </React.Fragment>
         ))}
@@ -370,7 +435,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             const dow = i % 7;
             const cellDate = c.cur ? `${year}-${String(month+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}` : '';
             const evs = c.cur ? (evsByDate[cellDate] || []) : [];
-            const isToday = c.cur && year === 2026 && month === 4 && c.d === 18;
+            const isToday = c.cur && cellDate === todayIso;
             return (
               <div key={i} style={{
                 background:'var(--surface)', minHeight:90, padding:'6px 8px', cursor:c.cur ? 'pointer' : 'default',
@@ -471,7 +536,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2 }}>{e.title}</div>
                     <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
-                      {formatTime(e.start)} – {formatTime(e.end)}
+                      {e.start === -1 ? 'весь день' : `${formatTime(e.start)} – ${formatTime(e.end)}`}
                     </div>
                   </div>
                   <span style={{ fontSize:10.5, padding:'3px 8px', borderRadius:5, flexShrink:0,

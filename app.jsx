@@ -457,7 +457,7 @@ const App = () => {
                     <div style={{ width:3, height:28, borderRadius:2, background:EV_COLORS[e.kind]||'var(--accent)', flexShrink:0 }} />
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:12.5, fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.title}</div>
-                      <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>{formatTime(e.start)} – {formatTime(e.end)}</div>
+                      <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>{e.start === -1 ? 'весь день' : `${formatTime(e.start)} – ${formatTime(e.end)}`}</div>
                     </div>
                   </div>
                 ))}
