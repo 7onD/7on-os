@@ -312,6 +312,10 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports.handler = async (event) => {
+  // Debug: log event structure to identify timer trigger format
+  console.log('EVENT_KEYS:', Object.keys(event).join(','));
+  console.log('EVENT_SAMPLE:', JSON.stringify(event).slice(0, 300));
+
   // Yandex Cloud Timer Trigger — runs reminder check on schedule
   if (event.messages && Array.isArray(event.messages)) {
     try {
