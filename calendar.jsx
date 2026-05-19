@@ -1,8 +1,8 @@
 // 7on OS — Calendar page (week / day / month views)
-const CalendarPage = ({ D, refresh }) => {
+const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [showAdd, setShowAdd]       = React.useState(false);
   const [saving, setSaving]         = React.useState(false);
-  const [form, setForm]             = React.useState({ title: '', day: '1', start: '10', end: '11', kind: 'work', description: '', reminder: '-1' });
+  const [form, setForm]             = React.useState({ title: '', day: '1', start: '10', end: '11', kind: 'personal', description: '', reminder: '-1' });
   const [detailEvent, setDetailEvent] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
@@ -68,6 +68,30 @@ const CalendarPage = ({ D, refresh }) => {
       kind: ev.kind || 'work', description: ev.description || '', reminder: String(ev.reminder ?? '-1'),
     });
   };
+
+  // Navigate to specific event from search
+  React.useEffect(() => {
+    if (!navTarget || navTarget.kind !== 'event') return;
+    const ev = D.EVENTS.find(e => String(e.id) === String(navTarget.id));
+    if (ev) {
+      // Calculate week offset for the event
+      if (ev.event_date) {
+        const evDate = new Date(ev.event_date + 'T00:00:00');
+        const daysDiff = Math.floor((evDate - BASE_MON) / 86400000);
+        const newOffset = Math.floor(daysDiff / 7);
+        setWeekOffset(newOffset);
+      }
+      // Open detail after state update
+      setTimeout(() => {
+        setDetailEvent(ev);
+        setDetailForm({
+          title: ev.title || '', day: String(ev.day), start: String(ev.start), end: String(ev.end),
+          kind: ev.kind || 'personal', description: ev.description || '', reminder: String(ev.reminder ?? '-1'),
+        });
+      }, 50);
+    }
+    onNavConsumed && onNavConsumed();
+  }, [navTarget]);
 
   const handleAdd = async () => {
     if (!form.title.trim()) return;

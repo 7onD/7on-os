@@ -32,30 +32,37 @@ function eventToDate(dayNum, hourFloat) {
   return d;
 }
 
-// Best-effort task due date → Date (fires at 9:00)
-function parseDueDate(due) {
+// Best-effort task due date → Date. Uses explicit timeStr if provided, otherwise 9:00.
+function parseDueDate(due, timeStr) {
   if (!due) return null;
   const s = due.toLowerCase().trim();
   const now = new Date();
+  let d = null;
   if (s.startsWith('сегодня') || s === 'today') {
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
-  }
-  if (s.startsWith('завтра') || s === 'tomorrow') {
-    const d = new Date(now); d.setDate(d.getDate() + 1);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0);
-  }
-  const MONTH_MAP = {
-    'янв':0,'феврал':1,'март':2,'апрел':3,'май':4,'мая':4,'июн':5,'июл':6,'авг':7,'сентябр':8,'сен':8,'октябр':9,'окт':9,'ноябр':10,'ноя':10,'декабр':11,'дек':11
-  };
-  for (const [key, mi] of Object.entries(MONTH_MAP)) {
-    if (s.includes(key)) {
-      const m = s.match(/(\d+)/);
-      if (m) return new Date(now.getFullYear(), mi, parseInt(m[1]), 9, 0, 0);
+    d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+  } else if (s.startsWith('завтра') || s === 'tomorrow') {
+    const tmp = new Date(now); tmp.setDate(tmp.getDate() + 1);
+    d = new Date(tmp.getFullYear(), tmp.getMonth(), tmp.getDate(), 9, 0, 0);
+  } else {
+    const MONTH_MAP = {
+      'янв':0,'феврал':1,'март':2,'апрел':3,'май':4,'мая':4,'июн':5,'июл':6,'авг':7,'сентябр':8,'сен':8,'октябр':9,'окт':9,'ноябр':10,'ноя':10,'декабр':11,'дек':11
+    };
+    for (const [key, mi] of Object.entries(MONTH_MAP)) {
+      if (s.includes(key)) {
+        const m = s.match(/(\d+)/);
+        if (m) { d = new Date(now.getFullYear(), mi, parseInt(m[1]), 9, 0, 0); break; }
+      }
+    }
+    if (!d) {
+      const dot = s.match(/(\d{1,2})\.(\d{1,2})/);
+      if (dot) d = new Date(now.getFullYear(), parseInt(dot[2]) - 1, parseInt(dot[1]), 9, 0, 0);
     }
   }
-  const dot = s.match(/(\d{1,2})\.(\d{1,2})/);
-  if (dot) return new Date(now.getFullYear(), parseInt(dot[2]) - 1, parseInt(dot[1]), 9, 0, 0);
-  return null;
+  if (d && timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)) {
+    const [h, m] = timeStr.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+  }
+  return d;
 }
 
 // ── RemindersManager component ────────────────────────────────────────────────
@@ -122,20 +129,46 @@ const RemindersManager = ({ tasks, events }) => {
       (tasks || []).forEach(t => {
         if (t.done) return;
         const mins = parseInt(t.reminder ?? '-1');
-        if (mins < 0) return;
-        const dueDate = parseDueDate(t.due);
+        const dueDate = parseDueDate(t.due, t.time);
         if (!dueDate) return;
-        const fireAt = new Date(dueDate.getTime() - mins * 60000);
-        const diff = now - fireAt;
-        if (diff >= 0 && diff < 60000) {
-          const key = `task_${t.id}_${mins}`;
-          if (!wasNotified(key)) {
-            const when = mins === 0 ? 'срок наступил'
-              : mins < 60 ? `срок через ${mins} мин`
-              : mins >= 1440 ? 'срок завтра'
-              : `срок через ${mins / 60} ч`;
-            fireNotification(`✅ ${t.title}`, when, key);
-            markNotified(key);
+
+        // If task has explicit time → always fire an "at time" notification
+        if (t.time) {
+          const diff = now - dueDate;
+          if (diff >= 0 && diff < 60000) {
+            const key = `task_${t.id}_at`;
+            if (!wasNotified(key)) {
+              fireNotification(`✅ ${t.title}`, 'Время пришло', key);
+              markNotified(key);
+            }
+          }
+          // Also fire advance reminder if set (mins > 0)
+          if (mins > 0) {
+            const fireAt = new Date(dueDate.getTime() - mins * 60000);
+            const diff2 = now - fireAt;
+            if (diff2 >= 0 && diff2 < 60000) {
+              const key = `task_${t.id}_${mins}`;
+              if (!wasNotified(key)) {
+                const when = mins < 60 ? `через ${mins} мин` : `через ${mins / 60} ч`;
+                fireNotification(`✅ ${t.title}`, `Срок ${when}`, key);
+                markNotified(key);
+              }
+            }
+          }
+        } else if (mins >= 0) {
+          // No explicit time — fire only if reminder is set
+          const fireAt = new Date(dueDate.getTime() - mins * 60000);
+          const diff = now - fireAt;
+          if (diff >= 0 && diff < 60000) {
+            const key = `task_${t.id}_${mins}`;
+            if (!wasNotified(key)) {
+              const when = mins === 0 ? 'срок наступил'
+                : mins < 60 ? `срок через ${mins} мин`
+                : mins >= 1440 ? 'срок завтра'
+                : `срок через ${mins / 60} ч`;
+              fireNotification(`✅ ${t.title}`, when, key);
+              markNotified(key);
+            }
           }
         }
       });

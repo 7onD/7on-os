@@ -114,7 +114,11 @@ const SearchOverlay = ({ query, D, setRoute, onClose }) => {
     .filter(e => e.title.toLowerCase().includes(q)).slice(0, 4);
 
   const total = tasks.length + contacts.length + events.length;
-  const go = (route) => { setRoute(route); onClose(); };
+  const go = (route, kind, id) => {
+    if (window.SEVEN_NAV) window.SEVEN_NAV(route, kind && id ? { kind, id } : null);
+    else setRoute(route);
+    onClose();
+  };
 
   return (
     <div className="search-overlay">
@@ -128,7 +132,7 @@ const SearchOverlay = ({ query, D, setRoute, onClose }) => {
             <>
               <div className="search-group-label">Задачи</div>
               {tasks.map(t => (
-                <button key={t.id} className="search-result" onClick={() => go('tasks')}>
+                <button key={t.id} className="search-result" onClick={() => go('tasks', 'task', t.id)}>
                   <span className={`task-priority ${t.priority}`} style={{ flexShrink:0, alignSelf:'center' }} />
                   <span className="search-result-title">{t.title}</span>
                   {t.due && <span className="search-result-meta">{fmtDate(t.due)}</span>}
@@ -140,7 +144,7 @@ const SearchOverlay = ({ query, D, setRoute, onClose }) => {
             <>
               <div className="search-group-label">Контакты</div>
               {contacts.map(c => (
-                <button key={c.id} className="search-result" onClick={() => go('contacts')}>
+                <button key={c.id} className="search-result" onClick={() => go('contacts', 'contact', c.id)}>
                   <span className="search-result-title">{c.name}</span>
                   {c.addr && <span className="search-result-meta">{c.addr}</span>}
                 </button>
@@ -151,7 +155,7 @@ const SearchOverlay = ({ query, D, setRoute, onClose }) => {
             <>
               <div className="search-group-label">События</div>
               {events.map(e => (
-                <button key={e.id} className="search-result" onClick={() => go('calendar')}>
+                <button key={e.id} className="search-result" onClick={() => go('calendar', 'event', e.id)}>
                   <span className="search-result-title">{e.title}</span>
                 </button>
               ))}
@@ -233,6 +237,7 @@ const App = () => {
   const [reconnecting, setReconnecting] = useState(false);
   const [query, setQuery] = useState('');
   const [storageTarget, setStorageTarget] = useState(null);
+  const [pageNavTarget, setPageNavTarget] = useState(null);
   const [showNotif, setShowNotif] = useState(false);
   const searchRef = useRef(null);
   const notifRef  = useRef(null);
@@ -241,7 +246,10 @@ const App = () => {
   useEffect(() => {
     window.SEVEN_NAV = (route, target) => {
       setRoute(route);
-      if (target) setStorageTarget(target);
+      if (target) {
+        if (target.kind === 'note' || target.kind === 'file') setStorageTarget(target);
+        else setPageNavTarget(target);
+      }
     };
     return () => { window.SEVEN_NAV = null; };
   }, []);
@@ -382,10 +390,10 @@ const App = () => {
 
         <div className="content">
           {route === 'dashboard' && <Dashboard D={D} setRoute={setRoute} refresh={refresh} />}
-          {route === 'tasks'     && <TasksPage D={D} refresh={refresh} />}
-          {route === 'calendar'  && <CalendarPage D={D} refresh={refresh} />}
+          {route === 'tasks'     && <TasksPage D={D} refresh={refresh} navTarget={pageNavTarget} onNavConsumed={() => setPageNavTarget(null)} />}
+          {route === 'calendar'  && <CalendarPage D={D} refresh={refresh} navTarget={pageNavTarget} onNavConsumed={() => setPageNavTarget(null)} />}
           {route === 'finance'   && <FinancePage D={D} refresh={refresh} />}
-          {route === 'contacts'  && <ContactsPage D={D} refresh={refresh} />}
+          {route === 'contacts'  && <ContactsPage D={D} refresh={refresh} navTarget={pageNavTarget} onNavConsumed={() => setPageNavTarget(null)} />}
           {route === 'storage'   && <StoragePage  D={D} refresh={refresh} navTarget={storageTarget} onNavConsumed={() => setStorageTarget(null)} />}
         </div>
       </div>

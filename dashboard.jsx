@@ -41,6 +41,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
 
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
+  const handleOpen = (task) => { if (window.SEVEN_NAV) window.SEVEN_NAV('tasks', { kind: 'task', id: task.id }); };
 
   return (
     <div>
@@ -76,7 +77,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {D.PERSONAL_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />)}
+            {D.PERSONAL_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />)}
           </div>
           {D.PERSONAL_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
@@ -91,7 +92,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {D.WORK_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />)}
+            {D.WORK_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />)}
           </div>
           {D.WORK_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
@@ -106,7 +107,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {(D.STUDY_TASKS || []).slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} />)}
+            {(D.STUDY_TASKS || []).slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />)}
           </div>
           {(D.STUDY_TASKS || []).length === 0 && <div className="placeholder">Нет задач</div>}
         </div>

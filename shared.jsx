@@ -82,7 +82,7 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
       <div className="task-body">
         <div className="task-title">{task.title}</div>
         <div className="task-meta">
-          <span>{fmtDate(task.due)}</span>
+          <span>{fmtDate(task.due)}{task.time && <span className="mono" style={{ marginLeft:4, opacity:0.7 }}>{task.time}</span>}</span>
           {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
           {task.description && <><span className="dot" /><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>заметка</span></>}
         </div>

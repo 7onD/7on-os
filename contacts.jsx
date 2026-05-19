@@ -1,5 +1,5 @@
 // 7on OS — Contacts page
-const ContactsPage = ({ D, refresh }) => {
+const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(D.CONTACTS[0]?.id || null);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -15,6 +15,12 @@ const ContactsPage = ({ D, refresh }) => {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const openContact = (id) => { setSelected(id); setMobileOpen(true); };
+
+  React.useEffect(() => {
+    if (!navTarget || navTarget.kind !== 'contact') return;
+    openContact(navTarget.id);
+    onNavConsumed && onNavConsumed();
+  }, [navTarget]);
 
   const startEdit = () => {
     if (!cur) return;

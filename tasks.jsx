@@ -1,14 +1,15 @@
 // 7on OS — Tasks page
-const TasksPage = ({ D, refresh }) => {
+const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [filter, setFilter] = React.useState('all');
   const [sort, setSort]     = React.useState('date');
   const [showAdd, setShowAdd] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '', reminder: '-1' });
+  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
   const [saving, setSaving] = React.useState(false);
   const [detailTask, setDetailTask] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
 
+  const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {
     const copy = [...list];
@@ -37,6 +38,14 @@ const TasksPage = ({ D, refresh }) => {
   const study = filterTasks(D.STUDY_TASKS || []);
   const allTasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || []);
 
+  // Open task from search/dashboard navigation
+  React.useEffect(() => {
+    if (!navTarget || navTarget.kind !== 'task') return;
+    const task = allTasks.find(t => t.id === navTarget.id);
+    if (task) openDetail(task);
+    onNavConsumed && onNavConsumed();
+  }, [navTarget]);
+
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
 
@@ -44,11 +53,11 @@ const TasksPage = ({ D, refresh }) => {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await createTask({ title: form.title.trim(), due: form.due, priority: form.priority, type: form.type, tag: form.type === 'work' ? form.tag : null, description: form.description, reminder: parseInt(form.reminder) });
+      const effectiveTag = form.tag.trim() || TYPE_TAG_DEFAULT[form.type] || 'Личное';
+      await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder) });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', due: 'Сегодня', priority: 'med', type: 'personal', tag: '', description: '', reminder: '-1' });
-
+      setForm({ title: '', due: 'Сегодня', time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
     } finally { setSaving(false); }
   };
 
@@ -57,9 +66,10 @@ const TasksPage = ({ D, refresh }) => {
     setDetailForm({
       title: task.title || '',
       due: task.due || '',
+      time: task.time || '',
       priority: task.priority || 'med',
       description: task.description || '',
-      tag: task.tag || '',
+      tag: task.tag || TYPE_TAG_DEFAULT[task.type] || 'Личное',
       done: task.done || false,
       reminder: String(task.reminder ?? '-1'),
     });
@@ -69,12 +79,14 @@ const TasksPage = ({ D, refresh }) => {
     if (!detailTask) return;
     setDetailSaving(true);
     try {
+      const effectiveTag = (detailForm.tag || '').trim() || TYPE_TAG_DEFAULT[detailTask.type] || 'Личное';
       await updateTask(detailTask.id, {
         title: detailForm.title,
         due: detailForm.due,
+        time: detailForm.time,
         priority: detailForm.priority,
         description: detailForm.description,
-        tag: detailForm.tag || null,
+        tag: effectiveTag,
         done: detailForm.done,
         reminder: parseInt(detailForm.reminder),
       });
@@ -98,7 +110,14 @@ const TasksPage = ({ D, refresh }) => {
     await refresh();
   };
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => {
+    const next = { ...f, [k]: v };
+    if (k === 'type') {
+      const typeDefaults = Object.values(TYPE_TAG_DEFAULT);
+      if (!f.tag.trim() || typeDefaults.includes(f.tag)) next.tag = TYPE_TAG_DEFAULT[v] || 'Личное';
+    }
+    return next;
+  });
   const setD = (k, v) => setDetailForm(f => ({ ...f, [k]: v }));
 
   const PRIORITY_LABELS = { high: 'Высокий', med: 'Средний', low: 'Низкий' };
@@ -157,6 +176,9 @@ const TasksPage = ({ D, refresh }) => {
           </Field>
           <div className="form-row">
             <Field label="Срок"><FInput placeholder="Сегодня, 20 мая…" value={form.due} onChange={e => set('due', e.target.value)} /></Field>
+            <Field label="Время"><FInput type="time" value={form.time} onChange={e => set('time', e.target.value)} /></Field>
+          </div>
+          <div className="form-row">
             <Field label="Приоритет">
               <FSelect value={form.priority} onChange={e => set('priority', e.target.value)}>
                 <option value="high">Высокий</option>
@@ -164,8 +186,6 @@ const TasksPage = ({ D, refresh }) => {
                 <option value="low">Низкий</option>
               </FSelect>
             </Field>
-          </div>
-          <div className="form-row">
             <Field label="Тип">
               <FSelect value={form.type} onChange={e => set('type', e.target.value)}>
                 <option value="personal">Личная</option>
@@ -173,15 +193,15 @@ const TasksPage = ({ D, refresh }) => {
                 <option value="study">Учебная</option>
               </FSelect>
             </Field>
-            {form.type === 'work' && (
-              <Field label="Метка"><FInput placeholder="Показ, Звонки…" value={form.tag} onChange={e => set('tag', e.target.value)} /></Field>
-            )}
           </div>
-          <Field label="Напоминание">
-            <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
-              {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </FSelect>
-          </Field>
+          <div className="form-row">
+            <Field label="Метка"><FInput placeholder="Личное, Показ…" value={form.tag} onChange={e => set('tag', e.target.value)} /></Field>
+            <Field label="Напоминание">
+              <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
+                {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </FSelect>
+            </Field>
+          </div>
           <Field label="Заметки">
             <DescriptionWithLinks placeholder="Дополнительная информация… (/ для ссылки на файл или заметку)" value={form.description} onChange={e => set('description', e.target.value)} />
           </Field>
@@ -208,6 +228,13 @@ const TasksPage = ({ D, refresh }) => {
                   <span className="stat-label" style={{ minWidth:80 }}>Срок</span>
                   <FInput value={detailForm.due} onChange={e => setD('due', e.target.value)}
                     placeholder="Сегодня, 20 мая…" style={{ fontSize:13, flex:1 }} />
+                  <FInput type="time" value={detailForm.time || ''} onChange={e => setD('time', e.target.value)}
+                    style={{ fontSize:13, width:110, marginLeft:8 }} />
+                </div>
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80 }}>Метка</span>
+                  <FInput value={detailForm.tag || ''} onChange={e => setD('tag', e.target.value)}
+                    placeholder="Личное, Показ…" style={{ fontSize:13, flex:1 }} />
                 </div>
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Приоритет</span>
@@ -223,13 +250,6 @@ const TasksPage = ({ D, refresh }) => {
                     ))}
                   </div>
                 </div>
-                {detailTask.type === 'work' && (
-                  <div className="task-detail-row">
-                    <span className="stat-label" style={{ minWidth:80 }}>Метка</span>
-                    <FInput value={detailForm.tag} onChange={e => setD('tag', e.target.value)}
-                      placeholder="Показ, Звонки…" style={{ fontSize:13, flex:1 }} />
-                  </div>
-                )}
               </div>
 
               <div className="task-detail-row" style={{ marginTop:12 }}>

@@ -74,9 +74,9 @@ async function loadAllData() {
 async function toggleTask(id, done) {
   await apiPatch('tasks', id, { done: done ? 1 : 0 });
 }
-async function createTask({ title, due, priority, type, tag, description }) {
+async function createTask({ title, due, time, priority, type, tag, description, reminder }) {
   const id = (type === 'personal' ? 'p' : type === 'work' ? 'w' : 'e') + Date.now();
-  await apiPost('tasks', { id, title, due: due || '', priority, type, tag: tag || null, done: 0, description: description || '' });
+  await apiPost('tasks', { id, title, due: due || '', time: time || '', priority, type, tag: tag || null, done: 0, description: description || '', reminder: reminder ?? -1 });
 }
 async function deleteTask(id) { await apiDel('tasks', id); }
 async function updateTask(id, updates) {
