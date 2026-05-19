@@ -25,6 +25,28 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     if (date >= 1 && date <= 31) eventsByDate[date] = (eventsByDate[date] || 0) + 1;
   });
 
+  // Build cal tag lookup from custom tags
+  const CAL_TAGS = D.CAL_TAGS || [];
+  const tagById = {};
+  CAL_TAGS.forEach(t => { tagById[t.id] = t; });
+
+  const evKindLabel = (kind) => {
+    if (kind === 'deal')     return 'Сделка';
+    if (kind === 'work')     return 'Работа';
+    if (kind === 'personal') return 'Личное';
+    if (kind === 'contact')  return 'Контакт';
+    if (kind === 'meeting')  return 'Встреча';
+    return tagById[kind]?.name || kind;
+  };
+  const evKindColor = (kind) => {
+    if (kind === 'deal')     return 'var(--violet)';
+    if (kind === 'work')     return 'var(--accent)';
+    if (kind === 'personal') return 'var(--blue)';
+    if (kind === 'contact')  return '#5ee5a0';
+    if (kind === 'meeting')  return 'var(--orange)';
+    return tagById[kind]?.color || 'var(--text-faint)';
+  };
+
   // Tasks "due on selected day" — match by day number in due string
   const calDayStr = String(calDay);
   const allTasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || []);
@@ -132,10 +154,15 @@ const Dashboard = ({ D, setRoute, refresh }) => {
               <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50 }}>{formatTime(e.start)}</span>
                 <span style={{ fontSize: 12.5, flex: 1 }}>{e.title}</span>
-                <span className={`tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'personal' ? 'cold' : e.kind === 'contact' ? 'hot' : 'warm'}`}
-                  style={e.kind === 'contact' ? { background:'rgba(94,229,160,0.15)', color:'#5ee5a0', border:'1px solid rgba(94,229,160,0.3)' } : {}}>
-                  {e.kind === 'deal' ? 'Сделка' : e.kind === 'work' ? 'Работа' : e.kind === 'personal' ? 'Личное' : e.kind === 'contact' ? 'Контакт' : 'Встреча'}
-                </span>
+                {(() => {
+                  const color = evKindColor(e.kind);
+                  const hex = color.startsWith('#') ? color : null;
+                  const bg = hex ? `${hex}26` : `rgba(0,0,0,0)`;
+                  const border = hex ? `1px solid ${hex}44` : undefined;
+                  const style = hex ? { background: bg, color: hex, border } : {};
+                  const cls = `tag ${e.kind === 'deal' ? 'deal' : e.kind === 'work' ? 'work' : e.kind === 'personal' ? 'cold' : e.kind === 'contact' ? 'hot' : 'warm'}`;
+                  return <span className={cls} style={style}>{evKindLabel(e.kind)}</span>;
+                })()}
               </div>
             ))}
             {dayTasks.map((t, i) => (
