@@ -1437,7 +1437,9 @@ button {
   .storage[data-mobile-screen="list"] .storage-pane[style*="span 2"]  { display: flex !important; }
 
   .editor-body { padding: 20px 20px 100px; }
-  .editor-toolbar { padding: 8px 12px; height: auto; min-height: 48px; }
+  .editor-toolbar { padding: 6px 10px; height: auto; min-height: 48px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: 2px; }
+  .editor-toolbar .grow { display: none; }
+  .editor-toolbar .editor-tool { width: 28px; height: 28px; flex-shrink: 0; }
   .editor-meta { display: none; }
   .files-toolbar { height: auto; padding: 10px 14px; gap: 8px; }
   .files-body { padding: 14px; }
@@ -1455,5 +1457,6 @@ button {
   .cal-header .cal-filters { display: none; }
   .cal-add-btn { width: 100%; justify-content: center; }
   .cal-date-label { font-size: 13px; }
+  .cal-mobile-view-toggle { position: sticky; top: 0; z-index: 10; background: var(--bg); padding-bottom: 6px; }
 }
 

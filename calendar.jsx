@@ -388,7 +388,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   // ── Month view ─────────────────────────────────────────────────────────────
-  const renderMonthView = () => {
+  const renderMonthView = (opts = {}) => {
     // Compute month based on weekOffset + monthOffset
     const baseDate = new Date(BASE_MON);
     baseDate.setDate(BASE_MON.getDate() + weekOffset * 7);
@@ -444,7 +444,15 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                 background:'var(--surface)', minHeight:90, padding:'6px 8px', cursor:c.cur ? 'pointer' : 'default',
                 opacity: c.cur ? 1 : 0.3,
               }}
-                onClick={() => { if (!c.cur) return; setCalView('day'); setViewDayIdx(dow < 7 ? dow : 0); }}>
+                onClick={() => {
+                  if (!c.cur) return;
+                  if (opts.onDaySel) {
+                    opts.onDaySel({ year, month, day: c.d, dow });
+                  } else {
+                    setCalView('day');
+                    setViewDayIdx(dow < 7 ? dow : 0);
+                  }
+                }}>
                 <div style={{
                   width:22, height:22, borderRadius:'50%', display:'grid', placeItems:'center',
                   fontFamily:'var(--font-mono)', fontSize:11.5, fontWeight: isToday ? 700 : 400,
@@ -473,24 +481,35 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     const selDay = DAYS[mobileDayIdx];
     const selEvents = D.EVENTS.filter(e => eventMatchesDay(e, mobileDayIdx)).sort((a,b) => a.start - b.start);
 
+    const mobileTodayOffset = todayWeekOffset;
+    const mobileTodayIdx = (new Date().getDay() + 6) % 7;
+
     return (
       <div className="cal-mobile">
-        {/* View toggle */}
-        <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+        {/* View toggle — sticky so always reachable while scrolling */}
+        <div className="cal-mobile-view-toggle" style={{ display:'flex', gap:6 }}>
           <button className="filter" data-on={mobileView==='week'?'1':'0'} onClick={() => setMobileView('week')}>Неделя</button>
           <button className="filter" data-on={mobileView==='month'?'1':'0'} onClick={() => setMobileView('month')}>Месяц</button>
         </div>
 
         {mobileView === 'month' ? (
-          /* Month view on mobile */
+          /* Month view on mobile — clicking a day jumps to that day in week strip */
           <div>
-            {renderMonthView()}
+            {renderMonthView({
+              onDaySel: ({ year, month, day, dow }) => {
+                const clickDate = new Date(year, month, day);
+                const newOffset = Math.floor((clickDate.setHours(0,0,0,0) - BASE_MON.getTime()) / (7 * 24 * 60 * 60 * 1000));
+                setWeekOffset(newOffset);
+                setMobileDayIdx(dow);
+                setMobileView('week');
+              }
+            })}
           </div>
         ) : (
           /* Week strip view */
           <>
             {/* Week navigation strip */}
-            <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4 }}>
               <button className="icon-btn" style={{ width:28, height:28, flexShrink:0 }}
                 onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
               <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:2 }}>
@@ -516,6 +535,13 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </div>
               <button className="icon-btn" style={{ width:28, height:28, flexShrink:0 }}
                 onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
+            </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
+              <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px' }}
+                disabled={DAYS[mobileDayIdx].today && weekOffset === mobileTodayOffset}
+                onClick={() => { setWeekOffset(mobileTodayOffset); setMobileDayIdx(mobileTodayIdx); }}>
+                Сегодня
+              </button>
             </div>
 
             {/* Selected day header */}
@@ -687,7 +713,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         <div style={{ flex:1 }} />
         <div className="cal-filters filters" style={{ marginBottom:0 }}>
           <button className="filter" data-on={calView==='week'?'1':'0'} onClick={() => setCalView('week')}>Неделя</button>
-          <button className="filter" data-on={calView==='day'?'1':'0'} onClick={() => setCalView('day')}>День</button>
+          <button className="filter" data-on={calView==='day'?'1':'0'} onClick={() => { setCalView('day'); if (weekOffset === todayWeekOffset) setViewDayIdx((new Date().getDay() + 6) % 7); }}>День</button>
           <button className="filter" data-on={calView==='month'?'1':'0'} onClick={() => setCalView('month')}>Месяц</button>
         </div>
         <button className="btn primary cal-add-btn" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Событие</button>

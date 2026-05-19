@@ -127,13 +127,28 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <Field label="Адрес объекта"><FInput placeholder="Тверская ул., 18, кв. 47" value={form.addr} onChange={e => set('addr',e.target.value)} /></Field>
       <Field label="Параметры"><FInput placeholder="78 м² · 3к · 6/12 · 32 млн ₽" value={form.params} onChange={e => set('params',e.target.value)} /></Field>
       <div className="form-row">
-        <Field label="Последний контакт"><FInput type="date" value={form.last_contact} onChange={e => set('last_contact',e.target.value)} /></Field>
+        <Field label="Последний контакт">
+          <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+            <FInput type="date" value={form.last_contact} onChange={e => set('last_contact',e.target.value)} style={{ flex:1, minWidth:0 }} />
+            {form.last_contact && <button type="button" className="icon-btn" style={{ flexShrink:0, width:24, height:24, fontSize:14, color:'var(--text-faint)' }} onClick={() => set('last_contact','')}>×</button>}
+          </div>
+        </Field>
         <Field label="Дней назад"><FInput type="number" min="0" value={form.days_since} onChange={e => set('days_since',e.target.value)} /></Field>
       </div>
       <Field label="Следующий шаг"><FInput placeholder="Подписать договор" value={form.next} onChange={e => set('next',e.target.value)} /></Field>
       <div className="form-row">
-        <Field label="Когда (дата)"><FInput type="date" value={form.next_when} onChange={e => set('next_when',e.target.value)} /></Field>
-        <Field label="Время"><FInput type="time" value={form.next_when_time} onChange={e => set('next_when_time',e.target.value)} /></Field>
+        <Field label="Когда (дата)">
+          <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+            <FInput type="date" value={form.next_when} onChange={e => set('next_when',e.target.value)} style={{ flex:1, minWidth:0 }} />
+            {form.next_when && <button type="button" className="icon-btn" style={{ flexShrink:0, width:24, height:24, fontSize:14, color:'var(--text-faint)' }} onClick={() => set('next_when','')}>×</button>}
+          </div>
+        </Field>
+        <Field label="Время">
+          <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+            <FInput type="time" value={form.next_when_time} onChange={e => set('next_when_time',e.target.value)} style={{ flex:1, minWidth:0 }} />
+            {form.next_when_time && <button type="button" className="icon-btn" style={{ flexShrink:0, width:24, height:24, fontSize:14, color:'var(--text-faint)' }} onClick={() => set('next_when_time','')}>×</button>}
+          </div>
+        </Field>
       </div>
       <Field label="Заметки"><FTextarea placeholder="История переговоров, договорённости…" value={form.notes} onChange={e => set('notes',e.target.value)} /></Field>
     </>

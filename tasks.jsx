@@ -194,14 +194,11 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </FSelect>
             </Field>
           </div>
-          <div className="form-row">
-            <Field label="Метка"><FInput placeholder="Личное, Показ…" value={form.tag} onChange={e => set('tag', e.target.value)} /></Field>
-            <Field label="Напоминание">
-              <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
-                {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </FSelect>
-            </Field>
-          </div>
+          <Field label="Напоминание">
+            <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
+              {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </FSelect>
+          </Field>
           <Field label="Заметки">
             <DescriptionWithLinks placeholder="Дополнительная информация… (/ для ссылки на файл или заметку)" value={form.description} onChange={e => set('description', e.target.value)} />
           </Field>
@@ -230,11 +227,6 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     placeholder="Сегодня, 20 мая…" style={{ fontSize:13, flex:1 }} />
                   <FInput type="time" value={detailForm.time || ''} onChange={e => setD('time', e.target.value)}
                     style={{ fontSize:13, width:110, marginLeft:8 }} />
-                </div>
-                <div className="task-detail-row">
-                  <span className="stat-label" style={{ minWidth:80 }}>Метка</span>
-                  <FInput value={detailForm.tag || ''} onChange={e => setD('tag', e.target.value)}
-                    placeholder="Личное, Показ…" style={{ fontSize:13, flex:1 }} />
                 </div>
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Приоритет</span>

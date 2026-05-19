@@ -78,13 +78,13 @@ const Dashboard = ({ D, setRoute, refresh }) => {
         </div>
 
         <div className="card" style={{ gridColumn: 'span 4' }}>
-          <div className="stat-label">Контакты · требуют касания</div>
-          <div className="stat-big mono">
-            {D.CONTACTS.filter(c => c.daysSince >= 7).length}
-          </div>
-          <div style={{ marginTop: 6 }} className="mono">
-            <span style={{ fontSize: 11, color: 'var(--orange)' }}>{hotLeads.length} горячих</span>
-            <span className="mono" style={{ color: 'var(--text-faint)', fontSize: 11, marginLeft: 8 }}>· {D.CONTACTS.length} всего</span>
+          <div className="stat-label">Контакты</div>
+          <div className="stat-big mono">{D.CONTACTS.length}</div>
+          <div style={{ marginTop: 6, display: 'flex', gap: 10, flexWrap: 'wrap' }} className="mono">
+            <span style={{ fontSize: 11, color: 'var(--orange)' }}>{D.CONTACTS.filter(c=>c.status==='hot').length} горячих</span>
+            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{D.CONTACTS.filter(c=>c.status==='warm').length} тёплых</span>
+            <span style={{ fontSize: 11, color: 'var(--accent)' }}>{D.CONTACTS.filter(c=>c.status==='work').length} в работе</span>
+            <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{D.CONTACTS.filter(c=>c.status==='cold').length} холодных</span>
           </div>
         </div>
 
