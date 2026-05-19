@@ -73,7 +73,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const stats = typeof calcStorageUsed === 'function' ? calcStorageUsed() : { usedDisplay: '—', capDisplay: '—', pct: 0 };
 
   const filteredNotes = React.useMemo(() => {
-    let ns = notes;
+    let ns = [...notes].sort((a, b) => (b.id > a.id ? 1 : -1)); // newest first
     if (folder === 'pinned') return ns.filter(n => n.pinned);
     if (folder !== 'all') ns = ns.filter(n => n.folder === folder);
     if (search) { const q = search.toLowerCase(); ns = ns.filter(n => n.title.toLowerCase().includes(q) || (n.preview || '').toLowerCase().includes(q)); }
@@ -101,13 +101,14 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     if (!newNoteTitle.trim()) return;
     setSaving(true);
     try {
-      await createNote({
+      const newId = await createNote({
         title: newNoteTitle.trim(),
         folder: folder !== 'all' && folder !== 'pinned' ? folder : 'nf-personal',
         pinned: false, modified: nowStr(), preview: '', blocks: '[]',
       });
       await refresh();
       setNewNoteTitle('');
+      if (newId) { setSelectedNote(newId); setMobileScreen('editor'); }
     } finally { setSaving(false); }
   };
 

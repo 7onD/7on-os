@@ -143,6 +143,7 @@ async function deleteFolder(id) { await apiDel('folders', id); }
 async function createNote({ title, folder, pinned, modified, preview, blocks }) {
   const id = 'n' + Date.now();
   await apiPost('notes', { id, title, folder: folder || 'f-personal', pinned: pinned ? 1 : 0, modified: modified || '', preview: preview || '', blocks: typeof blocks === 'string' ? blocks : JSON.stringify(blocks || []) });
+  return id;
 }
 async function updateNote(id, updates) {
   const p = { ...updates };

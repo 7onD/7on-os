@@ -9,20 +9,13 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   const hotLeads = D.CONTACTS.filter(c => c.status === 'hot');
 
   const _todayD = new Date();
-  const todayNum = (_todayD.getFullYear() === 2026 && _todayD.getMonth() === 4) ? _todayD.getDate() : 18;
-  const [calDay, setCalDay] = React.useState(todayNum);
+  const todayIso = `${_todayD.getFullYear()}-${String(_todayD.getMonth()+1).padStart(2,'0')}-${String(_todayD.getDate()).padStart(2,'0')}`;
+  const [calDay, setCalDay] = React.useState(todayIso);
 
-  // eventsByDate: { [dateNum]: count } for May 2026 mini-cal dots
-  // BASE_MON = May 18 = day 1, so date = 17 + day
+  // eventsByDate keyed by ISO date — works for ALL months, no hardcoding
   const eventsByDate = {};
   D.EVENTS.forEach(e => {
-    let date = 0;
-    if (e.event_date && e.event_date.startsWith('2026-05-')) {
-      date = parseInt(e.event_date.slice(8));
-    } else if (e.day) {
-      date = 17 + e.day; // May 18 = day 1 → 18
-    }
-    if (date >= 1 && date <= 31) eventsByDate[date] = (eventsByDate[date] || 0) + 1;
+    if (e.event_date) eventsByDate[e.event_date] = (eventsByDate[e.event_date] || 0) + 1;
   });
 
   // Build cal tag lookup from custom tags
@@ -47,21 +40,25 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     return tagById[kind]?.color || 'var(--text-faint)';
   };
 
-  // Tasks "due on selected day" — match by day number in due string
-  const calDayStr = String(calDay);
+  // Day label for the event list header
+  const MONTHS_SHORT_D = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const _calDayDate = calDay ? new Date(calDay + 'T00:00:00') : null;
+  const calDayLabel = !_calDayDate ? '—'
+    : calDay === todayIso ? 'Сегодня'
+    : `${_calDayDate.getDate()} ${MONTHS_SHORT_D[_calDayDate.getMonth()]}`;
+
+  // Tasks "due on selected day" — match by day number
+  const calDayNum = calDay ? parseInt(calDay.slice(8)) : 0;
   const allTasks = D.PERSONAL_TASKS.concat(D.WORK_TASKS).concat(D.STUDY_TASKS || []);
   const dayTasks = allTasks.filter(t => {
     if (!t.due) return false;
     const m = t.due.match(/(\d+)/);
-    return m && m[1] === calDayStr;
+    return m && m[1] === String(calDayNum);
   });
-  // Events for selected day — match by event_date or by legacy day-of-week
-  const calDayEvents = D.EVENTS.filter(e => {
-    if (e.event_date && e.event_date.startsWith('2026-05-')) {
-      return parseInt(e.event_date.slice(8)) === calDay;
-    }
-    return 17 + (e.day || 0) === calDay;
-  });
+  // Events for selected ISO date
+  const calDayEvents = D.EVENTS
+    .filter(e => e.event_date === calDay)
+    .sort((a, b) => a.start - b.start);
 
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
@@ -142,17 +139,17 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Календарь</div>
             <button className="card-link" onClick={() => setRoute('calendar')}>открыть →</button>
           </div>
-          <MiniCal year={2026} month={4} today={todayNum}
+          <MiniCal today={todayIso}
             eventsByDate={eventsByDate}
             selectedDay={calDay}
             onDayClick={setCalDay} />
           <div style={{ marginTop: 16 }}>
-            <div className="stat-label" style={{ marginBottom: 8 }}>
-              {calDay === todayNum ? 'Сегодня' : `${calDay} мая`}
-            </div>
+            <div className="stat-label" style={{ marginBottom: 8 }}>{calDayLabel}</div>
             {calDayEvents.map((e, i) => (
-              <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0 }}>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50 }}>{formatTime(e.start)}</span>
+              <div key={e.id}
+                style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0, cursor: 'pointer' }}
+                onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('calendar', { kind: 'event', id: e.id })}>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50, flexShrink: 0 }}>{formatTime(e.start)}</span>
                 <span style={{ fontSize: 12.5, flex: 1 }}>{e.title}</span>
                 {(() => {
                   const color = evKindColor(e.kind);

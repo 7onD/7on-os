@@ -105,18 +105,21 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
 };
 
 // ── MiniCal ──────────────────────────────────────────────────────────────────
-const MiniCal = ({ year: initYear = 2026, month: initMonth = 4, today = 18, eventDays = [], eventsByDate = {}, selectedDay = null, onDayClick }) => {
-  const [calYear,  setCalYear]  = React.useState(initYear);
-  const [calMonth, setCalMonth] = React.useState(initMonth);
+// eventsByDate keyed by ISO "YYYY-MM-DD", today/selectedDay are ISO strings
+const MiniCal = ({ today = null, eventsByDate = {}, selectedDay = null, onDayClick }) => {
+  const _now = new Date();
+  const [calYear,  setCalYear]  = React.useState(_now.getFullYear());
+  const [calMonth, setCalMonth] = React.useState(_now.getMonth());
 
-  const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); };
-  const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); };
-  const goToday   = () => { setCalYear(initYear); setCalMonth(initMonth); };
+  const _todayIso = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+  const _go = (ny, nm) => { setCalYear(ny); setCalMonth(nm); };
+  const prevMonthFn = () => calMonth === 0 ? _go(calYear-1, 11) : _go(calYear, calMonth-1);
+  const nextMonthFn = () => calMonth === 11 ? _go(calYear+1, 0) : _go(calYear, calMonth+1);
+  const goToday     = () => _go(_now.getFullYear(), _now.getMonth());
 
   const firstDay = new Date(calYear, calMonth, 1);
-  const lastDay  = new Date(calYear, calMonth + 1, 0);
   const startWeekday = (firstDay.getDay() + 6) % 7;
-  const daysInMonth  = lastDay.getDate();
+  const daysInMonth  = new Date(calYear, calMonth + 1, 0).getDate();
   const cells = [];
   const prevMonthLast = new Date(calYear, calMonth, 0).getDate();
   for (let i = startWeekday - 1; i >= 0; i--) cells.push({ d: prevMonthLast - i, out: true });
@@ -124,33 +127,33 @@ const MiniCal = ({ year: initYear = 2026, month: initMonth = 4, today = 18, even
   while (cells.length < 42) cells.push({ d: cells.length - daysInMonth - startWeekday + 1, out: true });
   const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   const dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  const isCurrentMonth = calYear === initYear && calMonth === initMonth;
+  const isCurrentMonthView = calYear === _now.getFullYear() && calMonth === _now.getMonth();
   return (
     <div className="minical">
       <div className="minical-head">
         <span style={{ cursor:'pointer', userSelect:'none' }} onClick={goToday} title="Вернуться к сегодня">
           {monthNames[calMonth]} {calYear}
-          {!isCurrentMonth && <span style={{ fontSize:10, color:'var(--accent)', marginLeft:6, fontFamily:'var(--font-mono)' }}>← сегодня</span>}
+          {!isCurrentMonthView && <span style={{ fontSize:10, color:'var(--accent)', marginLeft:6, fontFamily:'var(--font-mono)' }}>← сегодня</span>}
         </span>
         <span style={{ display: 'flex', gap: 4 }}>
-          <button className="icon-btn" style={{ width:24, height:24, borderRadius:6 }} onClick={prevMonth} title="Предыдущий месяц"><Icon name="chevron-left" size={12} /></button>
-          <button className="icon-btn" style={{ width:24, height:24, borderRadius:6 }} onClick={nextMonth} title="Следующий месяц"><Icon name="chevron-right" size={12} /></button>
+          <button className="icon-btn" style={{ width:24, height:24, borderRadius:6 }} onClick={prevMonthFn} title="Предыдущий месяц"><Icon name="chevron-left" size={12} /></button>
+          <button className="icon-btn" style={{ width:24, height:24, borderRadius:6 }} onClick={nextMonthFn} title="Следующий месяц"><Icon name="chevron-right" size={12} /></button>
         </span>
       </div>
       <div className="minical-grid">
         {dows.map(d => <div key={d} className="minical-dow">{d}</div>)}
         {cells.map((c, i) => {
-          const evCount = !c.out && isCurrentMonth
-            ? (eventsByDate[c.d] ?? (eventDays.includes(c.d) ? 1 : 0))
-            : 0;
+          const cellIso = c.out ? null : `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}`;
+          const evCount = cellIso ? (eventsByDate[cellIso] || 0) : 0;
+          const isToday = cellIso === (today || _todayIso);
           return (
             <div key={i} className="minical-day"
               data-out={c.out ? '1' : '0'}
-              data-today={!c.out && isCurrentMonth && c.d === today ? '1' : '0'}
+              data-today={isToday ? '1' : '0'}
               data-has={evCount > 0 ? '1' : '0'}
-              data-selected={!c.out && isCurrentMonth && c.d === selectedDay ? '1' : '0'}
+              data-selected={cellIso === selectedDay ? '1' : '0'}
               style={!c.out && onDayClick ? { cursor:'pointer' } : undefined}
-              onClick={() => !c.out && onDayClick && onDayClick(c.d)}>
+              onClick={() => !c.out && onDayClick && onDayClick(cellIso)}>
               <span>{c.d}</span>
               {evCount > 0 && (
                 <div style={{ display:'flex', justifyContent:'center', gap:2, marginTop:1, height:5, alignItems:'center' }}>
