@@ -2,7 +2,7 @@
 const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [showAdd, setShowAdd]       = React.useState(false);
   const [saving, setSaving]         = React.useState(false);
-  const [form, setForm]             = React.useState({ title: '', day: '1', start: '10', end: '11', kind: 'personal', description: '', reminder: '-1' });
+  const [form, setForm]             = React.useState(() => { const _d = new Date(); const _t = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`; return { title: '', date: _t, start: '10', end: '11', kind: 'personal', description: '', reminder: '-1' }; });
   const [detailEvent, setDetailEvent] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
@@ -61,7 +61,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const setDE = (k, v) => setDetailForm(f => ({ ...f, [k]: v }));
 
   const openSlot = (dayIdx, hour) => {
-    setForm(f => ({ ...f, day: String(dayIdx + 1), start: String(hour), end: String(hour + 1), _dateStr: dayToIso(DAYS[dayIdx]) }));
+    setForm(f => ({ ...f, date: dayToIso(DAYS[dayIdx]), start: String(hour), end: String(hour + 1) }));
     setShowAdd(true);
   };
 
@@ -69,7 +69,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     e.stopPropagation();
     setDetailEvent(ev);
     setDetailForm({
-      title: ev.title || '', day: String(ev.day), start: String(ev.start), end: String(ev.end),
+      title: ev.title || '', date: ev.event_date || '', day: String(ev.day), start: String(ev.start), end: String(ev.end),
       kind: ev.kind || 'work', description: ev.description || '', reminder: String(ev.reminder ?? '-1'),
     });
   };
@@ -90,7 +90,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       setTimeout(() => {
         setDetailEvent(ev);
         setDetailForm({
-          title: ev.title || '', day: String(ev.day), start: String(ev.start), end: String(ev.end),
+          title: ev.title || '', date: ev.event_date || '', day: String(ev.day), start: String(ev.start), end: String(ev.end),
           kind: ev.kind || 'personal', description: ev.description || '', reminder: String(ev.reminder ?? '-1'),
         });
       }, 50);
@@ -102,17 +102,15 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      const dayIdx = parseInt(form.day) - 1;
-      const event_date = form._dateStr || dayToIso(DAYS[dayIdx]);
       await createEvent({
-        title: form.title.trim(), day: parseInt(form.day),
+        title: form.title.trim(), day: 1,
         start: parseFloat(form.start), end: parseFloat(form.end),
         kind: form.kind, description: form.description, reminder: parseInt(form.reminder),
-        event_date,
+        event_date: form.date,
       });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', day: '1', start: '10', end: '11', kind: 'work', description: '', reminder: '-1' });
+      setForm(f => ({ ...f, title: '', description: '', reminder: '-1' }));
     } finally { setSaving(false); }
   };
 
@@ -120,10 +118,9 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (!detailEvent) return;
     setDetailSaving(true);
     try {
-      const dayIdx = parseInt(detailForm.day) - 1;
-      const event_date = dayToIso(DAYS[dayIdx]);
+      const event_date = detailForm.date || detailEvent.event_date || '';
       await updateEvent(detailEvent.id, {
-        title: detailForm.title, day: parseInt(detailForm.day),
+        title: detailForm.title, day: detailEvent.day || 1,
         start: parseFloat(detailForm.start), end: parseFloat(detailForm.end),
         kind: detailForm.kind, description: detailForm.description, reminder: parseInt(detailForm.reminder),
         event_date,
@@ -593,7 +590,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <Field label="Название"><FInput placeholder="Показ квартиры" value={form.title} onChange={e => set('title', e.target.value)} autoFocus /></Field>
           <div className="form-row">
             <Field label="День">
-              <FSelect value={form.day} onChange={e => set('day', e.target.value)}>{daySelect()}</FSelect>
+              <FInput type="date" value={form.date} onChange={e => set('date', e.target.value)} />
             </Field>
             {TAGS.length > 0 && (
               <Field label="Тег">
@@ -631,7 +628,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <div className="task-detail-meta">
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>День</span>
-                  <FSelect value={detailForm.day} onChange={e => setDE('day', e.target.value)} style={{ fontSize:13, flex:1 }}>{daySelect()}</FSelect>
+                  <FInput type="date" value={detailForm.date || ''} onChange={e => setDE('date', e.target.value)} style={{ fontSize:13, flex:1 }} />
                 </div>
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Время</span>

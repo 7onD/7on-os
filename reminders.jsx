@@ -23,13 +23,22 @@ function fireNotification(title, body, tag) {
   try { new Notification(title, { body, tag, silent: false }); } catch(e) {}
 }
 
-// Event day (1-7) + hour → Date. Base: Mon 18 May 2026.
+// Event object → Date. Prefers event_date (ISO), falls back to legacy day 1-7.
 const CAL_BASE = new Date(2026, 4, 18);
-function eventToDate(dayNum, hourFloat) {
-  const d = new Date(CAL_BASE);
-  d.setDate(CAL_BASE.getDate() + (dayNum - 1));
-  d.setHours(Math.floor(hourFloat), Math.round((hourFloat % 1) * 60), 0, 0);
-  return d;
+function eventToDate(ev) {
+  if (ev.event_date) {
+    const [y, mo, d] = ev.event_date.split('-').map(Number);
+    const dt = new Date(y, mo - 1, d);
+    const h = (ev.start !== undefined && ev.start !== -1) ? ev.start : 9;
+    dt.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+    return dt;
+  }
+  // Legacy: day 1-7 from BASE_MON
+  const dt = new Date(CAL_BASE);
+  dt.setDate(CAL_BASE.getDate() + ((ev.day || 1) - 1));
+  const h = ev.start !== undefined ? ev.start : 9;
+  dt.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+  return dt;
 }
 
 // Best-effort task due date → Date. Uses explicit timeStr if provided, otherwise 9:00.
@@ -38,7 +47,11 @@ function parseDueDate(due, timeStr) {
   const s = due.toLowerCase().trim();
   const now = new Date();
   let d = null;
-  if (s.startsWith('сегодня') || s === 'today') {
+  // ISO date YYYY-MM-DD (highest priority — used by date picker)
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    d = new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]), 9, 0, 0);
+  } else if (s.startsWith('сегодня') || s === 'today') {
     d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
   } else if (s.startsWith('завтра') || s === 'tomorrow') {
     const tmp = new Date(now); tmp.setDate(tmp.getDate() + 1);
@@ -108,7 +121,7 @@ const RemindersManager = ({ tasks, events }) => {
       (events || []).forEach(ev => {
         const mins = parseInt(ev.reminder ?? '-1');
         if (mins < 0) return;
-        const evDate = eventToDate(ev.day, ev.start);
+        const evDate = eventToDate(ev);
         const fireAt = new Date(evDate.getTime() - mins * 60000);
         const diff = now - fireAt;
         if (diff >= 0 && diff < 60000) {

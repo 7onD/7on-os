@@ -152,8 +152,125 @@ async function saveBotState(storToken, state) {
   } catch {}
 }
 
+// ── Server-side reminder check ────────────────────────────────────────────────
+async function getNotified(storToken) {
+  try {
+    const r = await fetch(`https://storage.yandexcloud.net/${BUCKET}/tg_notified.json`, {
+      headers: { Authorization: `Bearer ${storToken}` },
+    });
+    if (r.status === 404) return {};
+    return await r.json();
+  } catch { return {}; }
+}
+
+async function saveNotified(storToken, notified) {
+  try {
+    await fetch(`https://storage.yandexcloud.net/${BUCKET}/tg_notified.json`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${storToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(notified),
+    });
+  } catch {}
+}
+
+async function runReminderCheck(storToken) {
+  const ownerId = process.env.TG_OWNER_ID;
+  if (!ownerId) return { ok: false, reason: 'TG_OWNER_ID not set' };
+
+  const [tasks, events, notified] = await Promise.all([
+    getTable(storToken, 'tasks'),
+    getTable(storToken, 'events'),
+    getNotified(storToken),
+  ]);
+
+  const now = new Date();
+  const WINDOW_MS = 5 * 60 * 1000; // 5-minute window to handle cron jitter
+  const msgs = [];
+
+  // Check events
+  events.forEach(ev => {
+    const mins = parseInt(ev.reminder ?? '-1');
+    if (mins < 0 || ev.start_time === -1) return;
+    if (!ev.event_date) return; // skip legacy events without date
+
+    const [y, mo, d] = ev.event_date.split('-').map(Number);
+    const evDate = new Date(y, mo - 1, d);
+    const h = ev.start_time ?? 9;
+    evDate.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+
+    const fireAt = new Date(evDate.getTime() - mins * 60000);
+    const diff = now - fireAt;
+    if (diff >= 0 && diff < WINDOW_MS) {
+      const key = `ev_${ev.id}_${mins}`;
+      if (!notified[key]) {
+        const hh = `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`;
+        const when = mins === 0 ? 'начинается сейчас'
+          : mins < 60 ? `через ${mins} мин`
+          : mins === 60 ? 'через 1 час'
+          : mins >= 1440 ? 'завтра'
+          : `через ${Math.round(mins/60)} ч`;
+        msgs.push({ key, text: `📅 <b>${ev.title}</b>\n${ev.event_date} ${hh} · ${when}` });
+      }
+    }
+  });
+
+  // Check tasks
+  tasks.forEach(t => {
+    if (t.done) return;
+    const mins = parseInt(t.reminder ?? '-1');
+    if (mins < 0) return;
+
+    const due = (t.due || '').trim();
+    const iso = due.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!iso) return; // only handle ISO dates (date-picker created tasks)
+
+    const dueDate = new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]), 9, 0, 0);
+    if (t.time && /^\d{1,2}:\d{2}$/.test(t.time)) {
+      const [h, m] = t.time.split(':').map(Number);
+      dueDate.setHours(h, m, 0, 0);
+    }
+
+    const fireAt = new Date(dueDate.getTime() - mins * 60000);
+    const diff = now - fireAt;
+    if (diff >= 0 && diff < WINDOW_MS) {
+      const key = `task_${t.id}_${mins}`;
+      if (!notified[key]) {
+        const when = mins === 0 ? 'срок наступил'
+          : mins < 60 ? `через ${mins} мин`
+          : mins >= 1440 ? 'завтра'
+          : `через ${Math.round(mins/60)} ч`;
+        msgs.push({ key, text: `✅ <b>${t.title}</b>\n${when}` });
+      }
+    }
+  });
+
+  if (msgs.length > 0) {
+    await Promise.all(msgs.map(m =>
+      tgSend(ownerId, `🔔 Напоминание\n\n${m.text}`)
+    ));
+    msgs.forEach(m => { notified[m.key] = Date.now(); });
+    // Prune entries older than 48 hours to keep file small
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    Object.keys(notified).forEach(k => { if (notified[k] < cutoff) delete notified[k]; });
+    await saveNotified(storToken, notified);
+  }
+
+  return { ok: true, sent: msgs.length };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports.handler = async (event) => {
+  // Yandex Cloud Timer Trigger — runs reminder check on schedule
+  if (event.messages && Array.isArray(event.messages)) {
+    try {
+      const storToken = await getToken();
+      const result = await runReminderCheck(storToken);
+      return { statusCode: 200, body: JSON.stringify(result) };
+    } catch (e) {
+      return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+    }
+  }
+
   const method = event.httpMethod || 'GET';
   if (method === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
 
@@ -165,6 +282,12 @@ module.exports.handler = async (event) => {
   if (!table && !action) return reply({ message: '7on OS API v2 — Yandex' });
 
   try {
+    // ── check-reminders: manual trigger / test ──────────────────────────────
+    if (action === 'check-reminders') {
+      const storToken = await getToken();
+      return reply(await runReminderCheck(storToken));
+    }
+
     // ── bot-setup: register Telegram webhook (call once) ─────────────────────
     if (action === 'bot-setup') {
       const funcUrl = process.env.FUNCTION_URL;

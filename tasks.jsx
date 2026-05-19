@@ -3,13 +3,15 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [filter, setFilter] = React.useState('all');
   const [sort, setSort]     = React.useState('date');
   const [showAdd, setShowAdd] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', due: 'Сегодня', time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
+  const [form, setForm] = React.useState({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
   const [saving, setSaving] = React.useState(false);
   const [detailTask, setDetailTask] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
 
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const isDueToday = (due) => !!due && (due === _todayStr || due.toLowerCase().startsWith('сегодня'));
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {
     const copy = [...list];
@@ -57,7 +59,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder) });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', due: 'Сегодня', time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
+      setForm({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
     } finally { setSaving(false); }
   };
 
@@ -136,22 +138,22 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         </button>
       </div>
 
-      {tasks.filter(t => t.due && t.due.startsWith('Сегодня')).length > 0 && (
+      {tasks.filter(t => isDueToday(t.due)).length > 0 && (
         <>
           <div className="stat-label" style={{ marginTop:4 }}>Сегодня</div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {tasks.filter(t => t.due && t.due.startsWith('Сегодня')).map(t =>
+            {tasks.filter(t => isDueToday(t.due)).map(t =>
               <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
             )}
           </div>
         </>
       )}
 
-      {tasks.filter(t => !t.due || !t.due.startsWith('Сегодня')).length > 0 && (
+      {tasks.filter(t => !isDueToday(t.due)).length > 0 && (
         <>
           <div className="stat-label" style={{ marginTop:16 }}>Позже</div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {tasks.filter(t => !t.due || !t.due.startsWith('Сегодня')).map(t =>
+            {tasks.filter(t => !isDueToday(t.due)).map(t =>
               <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
             )}
           </div>
@@ -175,7 +177,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               onKeyDown={e => e.key === 'Enter' && handleAdd()} autoFocus />
           </Field>
           <div className="form-row">
-            <Field label="Срок"><FInput placeholder="Сегодня, 20 мая…" value={form.due} onChange={e => set('due', e.target.value)} /></Field>
+            <Field label="Срок"><FInput type="date" value={form.due} onChange={e => set('due', e.target.value)} /></Field>
             <Field label="Время"><FInput type="time" value={form.time} onChange={e => set('time', e.target.value)} /></Field>
           </div>
           <div className="form-row">
@@ -223,8 +225,8 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <div className="task-detail-meta">
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Срок</span>
-                  <FInput value={detailForm.due} onChange={e => setD('due', e.target.value)}
-                    placeholder="Сегодня, 20 мая…" style={{ fontSize:13, flex:1 }} />
+                  <FInput type="date" value={detailForm.due || ''} onChange={e => setD('due', e.target.value)}
+                    style={{ fontSize:13, flex:1 }} />
                   <FInput type="time" value={detailForm.time || ''} onChange={e => setD('time', e.target.value)}
                     style={{ fontSize:13, width:110, marginLeft:8 }} />
                 </div>
