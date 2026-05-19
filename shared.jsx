@@ -3,6 +3,14 @@ const { useState, useEffect, useMemo } = React;
 
 function fmtDate(s) {
   if (!s) return s;
+  const MONTHS_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  // ISO date/datetime: YYYY-MM-DD or YYYY-MM-DD HH:MM
+  const iso = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}))?/);
+  if (iso) {
+    const dateStr = `${parseInt(iso[3])} ${MONTHS_SHORT[parseInt(iso[2])-1]}`;
+    return iso[4] ? `${dateStr} ${iso[4]}` : dateStr;
+  }
+  // Russian text: "17 мая" → "17.05"
   const months = {
     'января':'01','февраля':'02','марта':'03','апреля':'04',
     'мая':'05','июня':'06','июля':'07','августа':'08',

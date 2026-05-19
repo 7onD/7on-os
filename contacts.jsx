@@ -10,7 +10,7 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [scheduleForm, setScheduleForm] = React.useState({ date: '', time: '10:00', reminder: '0', description: '' });
   const [scheduleSaving, setScheduleSaving] = React.useState(false);
 
-  const emptyForm = { name:'', phone:'', addr:'', params:'', last_contact:'', days_since:'0', status:'work', next:'', next_when:'', notes:'' };
+  const emptyForm = { name:'', phone:'', addr:'', params:'', last_contact:'', days_since:'0', status:'work', next:'', next_when:'', next_when_time:'', notes:'' };
   const [form, setForm] = React.useState(emptyForm);
 
   const filtered = filter === 'all' ? D.CONTACTS : D.CONTACTS.filter(c => c.status === filter);
@@ -27,11 +27,12 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const startEdit = () => {
     if (!cur) return;
+    const nwParts = (cur.nextWhen || '').split(' ');
     setForm({
       name: cur.name || '', phone: cur.phone || '', addr: cur.addr || '',
       params: cur.params || '', last_contact: cur.lastContact || '',
       days_since: String(cur.daysSince || 0), status: cur.status || 'work',
-      next: cur.next || '', next_when: cur.nextWhen || '', notes: cur.notes || '',
+      next: cur.next || '', next_when: nwParts[0] || '', next_when_time: nwParts[1] || '', notes: cur.notes || '',
     });
     setEditing(true);
   };
@@ -40,10 +41,11 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (!cur) return;
     setSaving(true);
     try {
+      const nw = [form.next_when, form.next_when_time].filter(Boolean).join(' ');
       await updateContact(cur.id, {
         name: form.name, phone: form.phone, addr: form.addr, params: form.params,
         last_contact: form.last_contact, days_since: parseInt(form.days_since) || 0,
-        status: form.status, next: form.next, next_when: form.next_when, notes: form.notes,
+        status: form.status, next: form.next, next_when: nw, notes: form.notes,
       });
       await refresh();
       setEditing(false);
@@ -54,10 +56,11 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
+      const nw = [form.next_when, form.next_when_time].filter(Boolean).join(' ');
       await createContact({
         name: form.name, phone: form.phone, addr: form.addr, params: form.params,
         last_contact: form.last_contact, days_since: parseInt(form.days_since) || 0,
-        status: form.status, next: form.next, next_when: form.next_when, notes: form.notes,
+        status: form.status, next: form.next, next_when: nw, notes: form.notes,
       });
       await refresh();
       setShowAdd(false);
@@ -124,11 +127,14 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <Field label="Адрес объекта"><FInput placeholder="Тверская ул., 18, кв. 47" value={form.addr} onChange={e => set('addr',e.target.value)} /></Field>
       <Field label="Параметры"><FInput placeholder="78 м² · 3к · 6/12 · 32 млн ₽" value={form.params} onChange={e => set('params',e.target.value)} /></Field>
       <div className="form-row">
-        <Field label="Последний контакт"><FInput placeholder="17 мая" value={form.last_contact} onChange={e => set('last_contact',e.target.value)} /></Field>
+        <Field label="Последний контакт"><FInput type="date" value={form.last_contact} onChange={e => set('last_contact',e.target.value)} /></Field>
         <Field label="Дней назад"><FInput type="number" min="0" value={form.days_since} onChange={e => set('days_since',e.target.value)} /></Field>
       </div>
       <Field label="Следующий шаг"><FInput placeholder="Подписать договор" value={form.next} onChange={e => set('next',e.target.value)} /></Field>
-      <Field label="Когда"><FInput placeholder="Сегодня 17:30" value={form.next_when} onChange={e => set('next_when',e.target.value)} /></Field>
+      <div className="form-row">
+        <Field label="Когда (дата)"><FInput type="date" value={form.next_when} onChange={e => set('next_when',e.target.value)} /></Field>
+        <Field label="Время"><FInput type="time" value={form.next_when_time} onChange={e => set('next_when_time',e.target.value)} /></Field>
+      </div>
       <Field label="Заметки"><FTextarea placeholder="История переговоров, договорённости…" value={form.notes} onChange={e => set('notes',e.target.value)} /></Field>
     </>
   );

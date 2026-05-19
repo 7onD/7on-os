@@ -31,11 +31,16 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TAG_PALETTE = ['#d4ff4d','#b78cff','#ffb45e','#7aa7ff','#ff6b7a','#5ee5a0','#4ad7d1','#74c0fc','#ff9a3c','#f06595'];
 
+  const _now = new Date();
+  const todayIso = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+  const todayWeekOffset = Math.floor((_now.setHours(0,0,0,0) - BASE_MON.getTime()) / (7 * 24 * 60 * 60 * 1000));
+
   // Current week days
   const DAYS = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(BASE_MON);
     d.setDate(BASE_MON.getDate() + weekOffset * 7 + i);
-    return { num: d.getDate(), month: d.getMonth(), year: d.getFullYear(), dow: DOW_NAMES[i], today: weekOffset === 0 && i === 0 };
+    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return { num: d.getDate(), month: d.getMonth(), year: d.getFullYear(), dow: DOW_NAMES[i], today: iso === todayIso };
   });
 
   // Convert DAYS[i] to ISO date string YYYY-MM-DD
@@ -593,7 +598,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <button className="btn" onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
               <div className="mono cal-date-label" style={{ fontSize:14, fontWeight:500, whiteSpace:'nowrap' }}>{weekLabel}</div>
               <button className="btn" onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
-              <button className="btn ghost" onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>Сегодня</button>
+              <button className="btn ghost" onClick={() => setWeekOffset(todayWeekOffset)} disabled={weekOffset === todayWeekOffset}>Сегодня</button>
             </>
           ) : (
             <div style={{ width:4 }} />

@@ -8,7 +8,9 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   const monthExpenses = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].expenses : 0;
   const hotLeads = D.CONTACTS.filter(c => c.status === 'hot');
 
-  const [calDay, setCalDay] = React.useState(18); // default to today
+  const _todayD = new Date();
+  const todayNum = (_todayD.getFullYear() === 2026 && _todayD.getMonth() === 4) ? _todayD.getDate() : 18;
+  const [calDay, setCalDay] = React.useState(todayNum);
 
   // eventsByDate: { [dateNum]: count } for May 2026 mini-cal dots
   // BASE_MON = May 18 = day 1, so date = 17 + day
@@ -118,13 +120,13 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Календарь</div>
             <button className="card-link" onClick={() => setRoute('calendar')}>открыть →</button>
           </div>
-          <MiniCal year={2026} month={4} today={18}
+          <MiniCal year={2026} month={4} today={todayNum}
             eventsByDate={eventsByDate}
             selectedDay={calDay}
             onDayClick={setCalDay} />
           <div style={{ marginTop: 16 }}>
             <div className="stat-label" style={{ marginBottom: 8 }}>
-              {calDay === 18 ? 'Сегодня' : `${calDay} мая`}
+              {calDay === todayNum ? 'Сегодня' : `${calDay} мая`}
             </div>
             {calDayEvents.map((e, i) => (
               <div key={e.id} style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0 }}>
@@ -182,7 +184,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('contacts')}>все →</button>
           </div>
           {hotLeads.map((c, i) => (
-            <div key={c.id} style={{ padding: '10px 0', borderBottom: i < hotLeads.length - 1 ? '1px solid var(--border)' : 0 }}>
+            <div key={c.id} onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('contacts', { kind: 'contact', id: c.id })}
+              style={{ padding: '10px 0', borderBottom: i < hotLeads.length - 1 ? '1px solid var(--border)' : 0, cursor: 'pointer' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div className="contact-name">{c.name}</div>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmtDate(c.lastContact)}</span>
