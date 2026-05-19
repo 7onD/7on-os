@@ -196,7 +196,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </FSelect>
             </Field>
           </div>
-          <Field label="Напоминание">
+          <Field label="Заранее уведомить">
             <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
               {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </FSelect>
@@ -247,7 +247,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </div>
 
               <div className="task-detail-row" style={{ marginTop:12 }}>
-                <span className="stat-label" style={{ minWidth:80 }}>Напоминание</span>
+                <span className="stat-label" style={{ minWidth:80 }}>Заранее</span>
                 <FSelect value={detailForm.reminder} onChange={e => setD('reminder', e.target.value)} style={{ fontSize:13, flex:1 }}>
                   {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </FSelect>

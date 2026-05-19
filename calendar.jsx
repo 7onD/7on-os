@@ -604,7 +604,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             <Field label="Начало (ч)"><FInput type="number" min="8" max="19" value={form.start} onChange={e => set('start', e.target.value)} /></Field>
             <Field label="Конец (ч)"><FInput type="number" min="8" max="20" value={form.end} onChange={e => set('end', e.target.value)} /></Field>
           </div>
-          <Field label="Напоминание">
+          <Field label="Заранее уведомить">
             <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
               {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </FSelect>
@@ -655,7 +655,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   </div>
                 </div>
                 <div className="task-detail-row">
-                  <span className="stat-label" style={{ minWidth:80 }}>Напоминание</span>
+                  <span className="stat-label" style={{ minWidth:80 }}>Заранее</span>
                   <FSelect value={detailForm.reminder} onChange={e => setDE('reminder', e.target.value)} style={{ fontSize:13, flex:1 }}>
                     {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </FSelect>

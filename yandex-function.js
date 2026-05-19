@@ -224,35 +224,41 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
   const msgs = [];
   const debugInfo = debug ? { now: now.toISOString(), tasks: [], events: [] } : null;
 
-  // Check events
+  // Check events — auto-fire at start time + optional advance reminder
   events.forEach(ev => {
-    const mins = parseInt(ev.reminder ?? '-1');
-    if (mins < 0 || ev.start_time === -1) return;
-    if (!ev.event_date) return;
+    if (ev.start_time === -1 || !ev.event_date) return;
 
     const [y, mo, d] = ev.event_date.split('-').map(Number);
     const evDate = new Date(y, mo - 1, d);
     const h = ev.start_time ?? 9;
     evDate.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+    const hh = `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`;
+    const mins = parseInt(ev.reminder ?? '-1');
 
-    const fireAt = new Date(evDate.getTime() - mins * 60000);
-    const diff = now - fireAt;
-    const key = `ev_${ev.id}_${mins}`;
+    // Auto: fire at event start
+    const diffAt = now - evDate;
+    const keyAt = `ev_${ev.id}_at`;
+    if (debugInfo) debugInfo.events.push({ id: ev.id, title: ev.title, event_date: ev.event_date, start: hh, reminder: mins, fireAt: evDate.toISOString(), diffMin: Math.round(diffAt/60000), alreadyNotified: !!notified[keyAt] });
+    if (diffAt >= 0 && diffAt < WINDOW_MS && !notified[keyAt]) {
+      msgs.push({ key: keyAt, text: `📅 <b>${ev.title}</b>\n${ev.event_date} ${hh} · начинается сейчас` });
+    }
 
-    if (debugInfo) debugInfo.events.push({ id: ev.id, title: ev.title, event_date: ev.event_date, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[key] });
-
-    if (diff >= 0 && diff < WINDOW_MS && !notified[key]) {
-      const hh = `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`;
-      const when = mins === 0 ? 'начинается сейчас' : mins < 60 ? `через ${mins} мин` : mins === 60 ? 'через 1 час' : mins >= 1440 ? 'завтра' : `через ${Math.round(mins/60)} ч`;
-      msgs.push({ key, text: `📅 <b>${ev.title}</b>\n${ev.event_date} ${hh} · ${when}` });
+    // Additional advance reminder
+    if (mins > 0) {
+      const fireAt = new Date(evDate.getTime() - mins * 60000);
+      const diff2 = now - fireAt;
+      const keyAdv = `ev_${ev.id}_adv_${mins}`;
+      if (diff2 >= 0 && diff2 < WINDOW_MS && !notified[keyAdv]) {
+        const when = mins < 60 ? `через ${mins} мин` : mins === 60 ? 'через 1 час' : mins >= 1440 ? 'завтра' : `через ${Math.round(mins/60)} ч`;
+        msgs.push({ key: keyAdv, text: `📅 <b>${ev.title}</b>\n${ev.event_date} ${hh} · ${when}` });
+      }
     }
   });
 
-  // Check tasks
+  // Check tasks — auto-fire at due time if time set; advance reminder as addition
   tasks.forEach(t => {
     if (t.done) return;
     const mins = parseInt(t.reminder ?? '-1');
-    if (mins < 0) return;
 
     const dueDate = parseServerDueDate(t.due, t.time);
     if (!dueDate) {
@@ -260,15 +266,36 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
       return;
     }
 
-    const fireAt = new Date(dueDate.getTime() - mins * 60000);
-    const diff = now - fireAt;
-    const key = `task_${t.id}_${mins}`;
-
-    if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[key] });
-
-    if (diff >= 0 && diff < WINDOW_MS && !notified[key]) {
-      const when = mins === 0 ? 'срок наступил' : mins < 60 ? `через ${mins} мин` : mins >= 1440 ? 'завтра' : `через ${Math.round(mins/60)} ч`;
-      msgs.push({ key, text: `✅ <b>${t.title}</b>\n${when}` });
+    if (t.time) {
+      // Auto: fire at exact due time
+      const diffAt = now - dueDate;
+      const keyAt = `task_${t.id}_at`;
+      if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, time: t.time, reminder: mins, fireAt: dueDate.toISOString(), diffMin: Math.round(diffAt/60000), alreadyNotified: !!notified[keyAt] });
+      if (diffAt >= 0 && diffAt < WINDOW_MS && !notified[keyAt]) {
+        msgs.push({ key: keyAt, text: `✅ <b>${t.title}</b>\nВремя пришло` });
+      }
+      // Additional advance reminder
+      if (mins > 0) {
+        const fireAt = new Date(dueDate.getTime() - mins * 60000);
+        const diff2 = now - fireAt;
+        const keyAdv = `task_${t.id}_adv_${mins}`;
+        if (diff2 >= 0 && diff2 < WINDOW_MS && !notified[keyAdv]) {
+          const when = mins < 60 ? `через ${mins} мин` : `через ${Math.round(mins/60)} ч`;
+          msgs.push({ key: keyAdv, text: `✅ <b>${t.title}</b>\nСрок ${when}` });
+        }
+      }
+    } else if (mins > 0) {
+      // No time — only fire if advance reminder explicitly set
+      const fireAt = new Date(dueDate.getTime() - mins * 60000);
+      const diff = now - fireAt;
+      const keyAdv = `task_${t.id}_adv_${mins}`;
+      if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, reminder: mins, fireAt: fireAt.toISOString(), diffMin: Math.round(diff/60000), alreadyNotified: !!notified[keyAdv] });
+      if (diff >= 0 && diff < WINDOW_MS && !notified[keyAdv]) {
+        const when = mins < 60 ? `срок через ${mins} мин` : mins >= 1440 ? 'срок завтра' : `срок через ${Math.round(mins/60)} ч`;
+        msgs.push({ key: keyAdv, text: `✅ <b>${t.title}</b>\n${when}` });
+      }
+    } else {
+      if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, reminder: mins, skip: 'no time set and no advance reminder' });
     }
   });
 

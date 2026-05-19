@@ -1,12 +1,13 @@
 // 7on OS — Reminders & Notifications
+// "В момент" убрано — теперь уведомление приходит автоматически если указаны дата+время.
+// Это поле — только дополнительное, заблаговременное.
 const REMINDER_OPTIONS = [
-  { value: '-1',  label: 'Нет' },
-  { value: '0',   label: 'В момент события' },
-  { value: '5',   label: 'За 5 минут' },
-  { value: '15',  label: 'За 15 минут' },
-  { value: '30',  label: 'За 30 минут' },
-  { value: '60',  label: 'За 1 час' },
-  { value: '120', label: 'За 2 часа' },
+  { value: '-1',   label: 'Нет' },
+  { value: '5',    label: 'За 5 минут' },
+  { value: '15',   label: 'За 15 минут' },
+  { value: '30',   label: 'За 30 минут' },
+  { value: '60',   label: 'За 1 час' },
+  { value: '120',  label: 'За 2 часа' },
   { value: '1440', label: 'За 1 день' },
 ];
 
@@ -117,50 +118,60 @@ const RemindersManager = ({ tasks, events }) => {
       if (Notification.permission !== 'granted') return;
       const now = new Date();
 
-      // Events
+      // Events — auto-fire at start time + optional advance reminder
       (events || []).forEach(ev => {
-        const mins = parseInt(ev.reminder ?? '-1');
-        if (mins < 0) return;
+        if (ev.start === -1) return; // skip all-day
         const evDate = eventToDate(ev);
-        const fireAt = new Date(evDate.getTime() - mins * 60000);
-        const diff = now - fireAt;
-        if (diff >= 0 && diff < 60000) {
-          const key = `ev_${ev.id}_${mins}`;
+        const mins = parseInt(ev.reminder ?? '-1');
+
+        // Auto: fire at event start time
+        const diffAt = now - evDate;
+        if (diffAt >= 0 && diffAt < 60000) {
+          const key = `ev_${ev.id}_at`;
           if (!wasNotified(key)) {
-            const when = mins === 0 ? 'начинается сейчас'
-              : mins < 60 ? `через ${mins} мин`
-              : mins === 60 ? 'через 1 час'
-              : mins >= 1440 ? 'завтра'
-              : `через ${mins / 60} ч`;
-            fireNotification(`📅 ${ev.title}`, when, key);
+            fireNotification(`📅 ${ev.title}`, 'начинается сейчас', key);
             markNotified(key);
+          }
+        }
+
+        // Additional advance reminder (if set)
+        if (mins > 0) {
+          const fireAt = new Date(evDate.getTime() - mins * 60000);
+          const diff = now - fireAt;
+          if (diff >= 0 && diff < 60000) {
+            const key = `ev_${ev.id}_adv_${mins}`;
+            if (!wasNotified(key)) {
+              const when = mins < 60 ? `через ${mins} мин` : mins === 60 ? 'через 1 час' : mins >= 1440 ? 'завтра' : `через ${mins / 60} ч`;
+              fireNotification(`📅 ${ev.title}`, when, key);
+              markNotified(key);
+            }
           }
         }
       });
 
-      // Tasks
+      // Tasks — auto-fire at due time if time is set; advance reminder always optional
       (tasks || []).forEach(t => {
         if (t.done) return;
         const mins = parseInt(t.reminder ?? '-1');
         const dueDate = parseDueDate(t.due, t.time);
         if (!dueDate) return;
 
-        // If task has explicit time → always fire an "at time" notification
         if (t.time) {
-          const diff = now - dueDate;
-          if (diff >= 0 && diff < 60000) {
+          // Auto: fire at exact due time
+          const diffAt = now - dueDate;
+          if (diffAt >= 0 && diffAt < 60000) {
             const key = `task_${t.id}_at`;
             if (!wasNotified(key)) {
               fireNotification(`✅ ${t.title}`, 'Время пришло', key);
               markNotified(key);
             }
           }
-          // Also fire advance reminder if set (mins > 0)
+          // Additional advance reminder
           if (mins > 0) {
             const fireAt = new Date(dueDate.getTime() - mins * 60000);
             const diff2 = now - fireAt;
             if (diff2 >= 0 && diff2 < 60000) {
-              const key = `task_${t.id}_${mins}`;
+              const key = `task_${t.id}_adv_${mins}`;
               if (!wasNotified(key)) {
                 const when = mins < 60 ? `через ${mins} мин` : `через ${mins / 60} ч`;
                 fireNotification(`✅ ${t.title}`, `Срок ${when}`, key);
@@ -168,17 +179,14 @@ const RemindersManager = ({ tasks, events }) => {
               }
             }
           }
-        } else if (mins >= 0) {
-          // No explicit time — fire only if reminder is set
+        } else if (mins > 0) {
+          // No time — only fire if advance reminder explicitly set
           const fireAt = new Date(dueDate.getTime() - mins * 60000);
           const diff = now - fireAt;
           if (diff >= 0 && diff < 60000) {
-            const key = `task_${t.id}_${mins}`;
+            const key = `task_${t.id}_adv_${mins}`;
             if (!wasNotified(key)) {
-              const when = mins === 0 ? 'срок наступил'
-                : mins < 60 ? `срок через ${mins} мин`
-                : mins >= 1440 ? 'срок завтра'
-                : `срок через ${mins / 60} ч`;
+              const when = mins < 60 ? `срок через ${mins} мин` : mins >= 1440 ? 'срок завтра' : `срок через ${mins / 60} ч`;
               fireNotification(`✅ ${t.title}`, when, key);
               markNotified(key);
             }
