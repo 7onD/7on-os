@@ -350,6 +350,9 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             onClick={() => setViewDayIdx(i => Math.min(6, i + 1))} disabled={viewDayIdx === 6}>
             <Icon name="chevron-right" size={13} />
           </button>
+          <button className="btn ghost" style={{ marginLeft:4 }}
+            onClick={() => { setWeekOffset(todayWeekOffset); setViewDayIdx((new Date().getDay() + 6) % 7); }}
+            disabled={DAYS[viewDayIdx].today}>Сегодня</button>
         </div>
         {/* All-day row for day view */}
         {allDayEvs.length > 0 && (
@@ -670,7 +673,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       {/* Header */}
       <div className="cal-header" style={{ display:'flex', gap:10, marginBottom:18, alignItems:'center', flexWrap:'wrap' }}>
         <div className="cal-nav" style={{ display:'flex', alignItems:'center', gap:6 }}>
-          {calView !== 'month' ? (
+          {calView === 'week' ? (
             <>
               <button className="btn" onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
               <div className="mono cal-date-label" style={{ fontSize:14, fontWeight:500, whiteSpace:'nowrap' }}>{weekLabel}</div>
