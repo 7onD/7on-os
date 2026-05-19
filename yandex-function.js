@@ -59,18 +59,22 @@ function parseBody(event) {
 }
 
 
-// ── MAX Bot helpers ───────────────────────────────────────────────────────────
-const MAX_API = 'https://botapi.max.vk.com';
-
-async function maxSend(text) {
-  const token   = process.env.MAX_BOT_TOKEN;
-  const ownerId = process.env.MAX_OWNER_ID;
-  if (!token || !ownerId) return;
-  await fetch(`${MAX_API}/messages/sendMessage?access_token=${token}`, {
+// ── Telegram Bot helpers ──────────────────────────────────────────────────────
+function tgApi(method, body) {
+  const token = process.env.TG_BOT_TOKEN;
+  if (!token) return Promise.resolve(null);
+  return fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: ownerId, message: { text } }),
-  });
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+}
+
+// Send message to owner (chat_id stored in TG_OWNER_ID)
+async function tgSend(text, chatId) {
+  const id = chatId || process.env.TG_OWNER_ID;
+  if (!id) return;
+  await tgApi('sendMessage', { chat_id: id, text, parse_mode: 'HTML' });
 }
 
 function todayIso() {
@@ -78,16 +82,14 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// Parse incoming MAX update → return { userId, text } or null
-function parseMaxUpdate(body) {
-  // MAX webhook sends single update (not array)
-  const upd = body;
-  if (!upd || upd.update_type !== 'message_created') return null;
-  const msg = upd.message;
+// Parse Telegram webhook update → { chatId, text } or null
+function parseTgUpdate(body) {
+  const msg = body?.message || body?.edited_message;
   if (!msg) return null;
-  const userId = msg.sender?.user_id || msg.sender?.userId || null;
-  const text   = msg.body?.text || msg.text || '';
-  return { userId, text: text.trim() };
+  return {
+    chatId: String(msg.chat?.id || ''),
+    text: (msg.text || '').trim(),
+  };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -103,125 +105,130 @@ module.exports.handler = async (event) => {
   if (!table && !action) return reply({ message: '7on OS API v2 — Yandex' });
 
   try {
-    // ── bot-setup: register MAX webhook (call once) ───────────────────────────
+    // ── bot-setup: register Telegram webhook (call once) ─────────────────────
     if (action === 'bot-setup') {
-      const token = process.env.MAX_BOT_TOKEN;
-      if (!token) return reply({ error: 'MAX_BOT_TOKEN not set' }, 500);
-      const webhookUrl = process.env.FUNCTION_URL + '?action=bot';
-      const r = await fetch(`${MAX_API}/subscriptions?access_token=${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webhookUrl }),
+      const funcUrl = process.env.FUNCTION_URL;
+      if (!funcUrl) return reply({ error: 'FUNCTION_URL not set' }, 500);
+      const res = await tgApi('setWebhook', {
+        url: `${funcUrl}?action=bot`,
+        allowed_updates: ['message'],
+        drop_pending_updates: true,
       });
-      const data = await r.json();
-      return reply({ ok: r.ok, max_response: data });
+      return reply({ ok: true, tg: res });
     }
 
-    // ── bot: MAX webhook endpoint ─────────────────────────────────────────────
+    // ── bot: Telegram webhook ─────────────────────────────────────────────────
     if (action === 'bot') {
-      const body  = parseBody(event);
-      const upd   = parseMaxUpdate(body);
+      const body = parseBody(event);
+      const upd  = parseTgUpdate(body);
+      if (!upd) return reply({ ok: true });
 
-      // MAX sends verification GET on setup — just confirm
-      if (method === 'GET') return { statusCode: 200, headers: CORS, body: 'ok' };
+      const { chatId, text } = upd;
 
-      if (!upd) return reply({ ok: true }); // unknown update type — ignore
+      // Security: only owner can use bot
+      const ownerId = process.env.TG_OWNER_ID;
+      if (ownerId && chatId !== ownerId) {
+        await tgSend('⛔ Доступ запрещён.', chatId);
+        return reply({ ok: true });
+      }
 
-      const { text } = upd;
-      const token = await getToken();
+      const storToken = await getToken();
 
-      // ── /task or /t — рабочая задача ───────────────────────────────────────
+      // ── /task или /t — рабочая задача ─────────────────────────────────────
       if (/^\/task\b|^\/t\b/i.test(text)) {
         const title = text.replace(/^\/task\s*|^\/t\s*/i, '').trim();
-        if (!title) { await maxSend('✏️ Укажи название: /task Позвонить Иванову'); return reply({ ok: true }); }
-        const id = 'w' + Date.now();
-        const tasks = await getTable(token, 'tasks');
-        tasks.push({ id, title, type: 'work', priority: 'med', done: 0, due: '', time: '', tag: 'Риэлтор', description: '📱 Из MAX', reminder: -1 });
-        await saveTable(token, 'tasks', tasks);
-        await maxSend(`✅ Рабочая задача создана:\n"${title}"`);
+        if (!title) { await tgSend('✏️ Укажи название:\n/task Позвонить Иванову', chatId); return reply({ ok: true }); }
+        const tasks = await getTable(storToken, 'tasks');
+        tasks.push({ id: 'w' + Date.now(), title, type: 'work', priority: 'med', done: 0, due: '', time: '', tag: 'Риэлтор', description: '📱 Из Telegram', reminder: -1 });
+        await saveTable(storToken, 'tasks', tasks);
+        await tgSend(`✅ Рабочая задача создана:\n<b>${title}</b>`, chatId);
         return reply({ ok: true });
       }
 
-      // ── /p — личная задача ─────────────────────────────────────────────────
+      // ── /p — личная задача ────────────────────────────────────────────────
       if (/^\/p\b/i.test(text)) {
         const title = text.replace(/^\/p\s*/i, '').trim();
-        if (!title) { await maxSend('✏️ Укажи название: /p Купить продукты'); return reply({ ok: true }); }
-        const id = 'p' + Date.now();
-        const tasks = await getTable(token, 'tasks');
-        tasks.push({ id, title, type: 'personal', priority: 'med', done: 0, due: '', time: '', tag: 'Личное', description: '📱 Из MAX', reminder: -1 });
-        await saveTable(token, 'tasks', tasks);
-        await maxSend(`✅ Личная задача создана:\n"${title}"`);
+        if (!title) { await tgSend('✏️ Укажи название:\n/p Купить продукты', chatId); return reply({ ok: true }); }
+        const tasks = await getTable(storToken, 'tasks');
+        tasks.push({ id: 'p' + Date.now(), title, type: 'personal', priority: 'med', done: 0, due: '', time: '', tag: 'Личное', description: '📱 Из Telegram', reminder: -1 });
+        await saveTable(storToken, 'tasks', tasks);
+        await tgSend(`✅ Личная задача создана:\n<b>${title}</b>`, chatId);
         return reply({ ok: true });
       }
 
-      // ── /study — учебная задача ────────────────────────────────────────────
+      // ── /study — учебная задача ───────────────────────────────────────────
       if (/^\/study\b/i.test(text)) {
         const title = text.replace(/^\/study\s*/i, '').trim();
-        if (!title) { await maxSend('✏️ Укажи название: /study Прочитать главу'); return reply({ ok: true }); }
-        const id = 'e' + Date.now();
-        const tasks = await getTable(token, 'tasks');
-        tasks.push({ id, title, type: 'study', priority: 'med', done: 0, due: '', time: '', tag: 'Учёба', description: '📱 Из MAX', reminder: -1 });
-        await saveTable(token, 'tasks', tasks);
-        await maxSend(`✅ Учебная задача создана:\n"${title}"`);
+        if (!title) { await tgSend('✏️ Укажи название:\n/study Прочитать главу', chatId); return reply({ ok: true }); }
+        const tasks = await getTable(storToken, 'tasks');
+        tasks.push({ id: 'e' + Date.now(), title, type: 'study', priority: 'med', done: 0, due: '', time: '', tag: 'Учёба', description: '📱 Из Telegram', reminder: -1 });
+        await saveTable(storToken, 'tasks', tasks);
+        await tgSend(`✅ Учебная задача создана:\n<b>${title}</b>`, chatId);
         return reply({ ok: true });
       }
 
-      // ── /tasks — список открытых задач ────────────────────────────────────
+      // ── /tasks — список открытых задач ───────────────────────────────────
       if (/^\/tasks\b/i.test(text)) {
-        const tasks = await getTable(token, 'tasks');
+        const tasks = await getTable(storToken, 'tasks');
         const open  = tasks.filter(t => !t.done);
-        if (!open.length) { await maxSend('📋 Открытых задач нет'); return reply({ ok: true }); }
+        if (!open.length) { await tgSend('📋 Открытых задач нет', chatId); return reply({ ok: true }); }
         const work     = open.filter(t => t.type === 'work');
         const personal = open.filter(t => t.type === 'personal');
         const study    = open.filter(t => t.type === 'study');
-        const lines = [`📋 Открытых задач: ${open.length}`];
-        if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,5).forEach(t => lines.push(`  • ${t.title}`)); }
-        if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,5).forEach(t => lines.push(`  • ${t.title}`)); }
-        if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,5).forEach(t => lines.push(`  • ${t.title}`)); }
-        await maxSend(lines.join('\n'));
+        const lines = [`📋 Открытых задач: <b>${open.length}</b>`];
+        if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,7).forEach(t => lines.push(`  • ${t.title}`)); }
+        if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,7).forEach(t => lines.push(`  • ${t.title}`)); }
+        if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,7).forEach(t => lines.push(`  • ${t.title}`)); }
+        await tgSend(lines.join('\n'), chatId);
         return reply({ ok: true });
       }
 
       // ── /today — события и задачи на сегодня ─────────────────────────────
       if (/^\/today\b/i.test(text)) {
         const iso    = todayIso();
-        const events = await getTable(token, 'events');
-        const tasks  = await getTable(token, 'tasks');
-        const todayEvs  = events.filter(e => e.event_date === iso).sort((a,b) => a.start_time - b.start_time);
+        const [events, tasks] = await Promise.all([getTable(storToken, 'events'), getTable(storToken, 'tasks')]);
+        const todayEvs  = events.filter(e => e.event_date === iso).sort((a, b) => a.start_time - b.start_time);
         const todayTask = tasks.filter(t => !t.done && (t.due || '').toLowerCase().includes('сегодня'));
-        const lines = [`📅 Сегодня, ${iso}:`];
+        const lines = [`📅 <b>Сегодня, ${iso}</b>`];
         if (todayEvs.length) {
-          lines.push(''); lines.push('🗓 События:');
+          lines.push('\n🗓 <b>События:</b>');
           todayEvs.forEach(e => {
-            const t = e.start_time === -1 ? 'весь день' : `${String(Math.floor(e.start_time)).padStart(2,'0')}:00`;
-            lines.push(`  ${t} — ${e.title}`);
+            const hh = e.start_time === -1 ? 'весь день' : `${String(Math.floor(e.start_time)).padStart(2,'0')}:00`;
+            lines.push(`  ${hh} — ${e.title}`);
           });
         }
         if (todayTask.length) {
-          lines.push(''); lines.push('✅ Задачи на сегодня:');
+          lines.push('\n✅ <b>Задачи на сегодня:</b>');
           todayTask.forEach(t => lines.push(`  • ${t.title}`));
         }
-        if (!todayEvs.length && !todayTask.length) lines.push('Нет событий и задач 🎉');
-        await maxSend(lines.join('\n'));
+        if (!todayEvs.length && !todayTask.length) lines.push('\nНет событий и задач 🎉');
+        await tgSend(lines.join('\n'), chatId);
         return reply({ ok: true });
       }
 
-      // ── /help ─────────────────────────────────────────────────────────────
-      if (/^\/help\b|^\/start\b/i.test(text)) {
-        await maxSend(
-          '🤖 7on OS Bot\n\n' +
-          '/task [название] — рабочая задача\n' +
-          '/p [название]    — личная задача\n' +
+      // ── /id — показать свой chat_id (для настройки) ───────────────────────
+      if (/^\/id\b/i.test(text)) {
+        await tgSend(`Твой chat_id: <code>${chatId}</code>\nДобавь его в переменную TG_OWNER_ID`, chatId);
+        return reply({ ok: true });
+      }
+
+      // ── /start или /help ──────────────────────────────────────────────────
+      if (/^\/start\b|^\/help\b/i.test(text)) {
+        await tgSend(
+          '🤖 <b>7on OS Bot</b>\n\n' +
+          '/task [название]  — рабочая задача\n' +
+          '/p [название]     — личная задача\n' +
           '/study [название] — учебная задача\n' +
-          '/tasks           — все открытые задачи\n' +
-          '/today           — события и задачи на сегодня\n' +
-          '/help            — эта справка',
+          '/tasks            — все открытые задачи\n' +
+          '/today            — события и задачи на сегодня\n' +
+          '/id               — твой chat_id\n' +
+          '/help             — эта справка',
+          chatId,
         );
         return reply({ ok: true });
       }
 
-      // Неизвестная команда
-      await maxSend('❓ Не понял команду. Напиши /help для справки.');
+      await tgSend('❓ Не понял. Напиши /help', chatId);
       return reply({ ok: true });
     }
 
