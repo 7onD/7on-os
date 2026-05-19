@@ -209,7 +209,6 @@ const MobileNav = ({ route, setRoute }) => {
     { id: 'dashboard', label: 'Главная',   icon: 'dashboard' },
     { id: 'tasks',     label: 'Задачи',    icon: 'tasks' },
     { id: 'calendar',  label: 'Календарь', icon: 'calendar' },
-    { id: 'finance',   label: 'Финансы',   icon: 'finance' },
     { id: 'contacts',  label: 'CRM',       icon: 'contacts' },
     { id: 'storage',   label: 'Файлы',     icon: 'storage' },
   ];
@@ -312,7 +311,6 @@ const App = () => {
     dashboard: 'Dashboard',
     tasks: 'Задачи',
     calendar: 'Календарь',
-    finance: 'Финансы',
     contacts: 'Контакты собственников',
     storage: 'Хранилище',
   };
@@ -325,7 +323,6 @@ const App = () => {
     dashboard: `Добрый день, Семён · ${_todayFmt}`,
     tasks: 'Личные, рабочие, учебные',
     calendar: 'Неделя 21 · 18–24.05',
-    finance: 'Доход, расходы, сделки и цели',
     contacts: 'Собственники · CRM',
     storage: 'Заметки и файлы',
   };
@@ -408,7 +405,6 @@ const App = () => {
           {route === 'dashboard' && <Dashboard D={D} setRoute={setRoute} refresh={refresh} />}
           {route === 'tasks'     && <TasksPage D={D} refresh={refresh} navTarget={pageNavTarget} onNavConsumed={() => setPageNavTarget(null)} />}
           {route === 'calendar'  && <CalendarPage D={D} refresh={refresh} navTarget={pageNavTarget} onNavConsumed={() => setPageNavTarget(null)} />}
-          {route === 'finance'   && <FinancePage D={D} refresh={refresh} />}
           {route === 'contacts'  && <ContactsPage D={D} refresh={refresh} navTarget={pageNavTarget} onNavConsumed={() => setPageNavTarget(null)} />}
           {route === 'storage'   && <StoragePage  D={D} refresh={refresh} navTarget={storageTarget} onNavConsumed={() => setStorageTarget(null)} />}
         </div>

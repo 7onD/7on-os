@@ -3,9 +3,6 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   const personalCount = D.PERSONAL_TASKS.filter(t => !t.done).length;
   const workCount = D.WORK_TASKS.filter(t => !t.done).length;
   const studyCount = (D.STUDY_TASKS || []).filter(t => !t.done).length;
-  const totalCommission = D.DEALS.reduce((s, d) => s + d.commission, 0);
-  const monthIncome = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].income : 0;
-  const monthExpenses = D.MONTHLY.length ? D.MONTHLY[D.MONTHLY.length - 1].expenses : 0;
   const hotLeads = D.CONTACTS.filter(c => c.status === 'hot');
 
   const _todayD = new Date();
@@ -175,31 +172,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           </div>
         </div>
 
-        {/* Finance overview */}
-        <div className="card" style={{ gridColumn: 'span 7' }}>
-          <div className="card-header">
-            <div className="card-title">Финансы</div>
-            <button className="card-link" onClick={() => setRoute('finance')}>открыть →</button>
-          </div>
-          <div style={{ display: 'flex', gap: 32, marginBottom: 8 }}>
-            <div>
-              <div className="stat-label">Доход</div>
-              <div className="mono" style={{ fontSize: 22, fontWeight: 500, color: 'var(--green)' }}>+₽{monthIncome.toLocaleString('ru-RU')}k</div>
-            </div>
-            <div>
-              <div className="stat-label">Расход</div>
-              <div className="mono" style={{ fontSize: 22, fontWeight: 500 }}>−₽{monthExpenses.toLocaleString('ru-RU')}k</div>
-            </div>
-            <div>
-              <div className="stat-label">Чистая прибыль</div>
-              <div className="mono" style={{ fontSize: 22, fontWeight: 500, color: 'var(--accent)' }}>₽{(monthIncome - monthExpenses).toLocaleString('ru-RU')}k</div>
-            </div>
-          </div>
-          <BarChart data={D.MONTHLY} />
-        </div>
-
         {/* Hot leads */}
-        <div className="card" style={{ gridColumn: 'span 5' }}>
+        <div className="card" style={{ gridColumn: 'span 12' }}>
           <div className="card-header">
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Icon name="flame" size={14} />
@@ -207,46 +181,24 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             </div>
             <button className="card-link" onClick={() => setRoute('contacts')}>все →</button>
           </div>
-          {hotLeads.map((c, i) => (
-            <div key={c.id} onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('contacts', { kind: 'contact', id: c.id })}
-              style={{ padding: '10px 0', borderBottom: i < hotLeads.length - 1 ? '1px solid var(--border)' : 0, cursor: 'pointer' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <div className="contact-name">{c.name}</div>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmtDate(c.lastContact)}</span>
-              </div>
-              <div className="contact-addr" style={{ marginTop: 4 }}>{c.addr}</div>
-              <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>{c.params}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                <span className="mono" style={{ fontSize: 10.5, color: 'var(--accent)' }}>→ {c.next}</span>
-                <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>· {fmtDate(c.nextWhen)}</span>
-              </div>
-            </div>
-          ))}
           {hotLeads.length === 0 && <div className="placeholder">Нет горячих лидов</div>}
-        </div>
-
-        {/* Goals */}
-        <div className="card" style={{ gridColumn: 'span 12' }}>
-          <div className="card-header">
-            <div className="card-title">Цели накоплений</div>
-            <button className="card-link" onClick={() => setRoute('finance')}>все →</button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: hotLeads.length ? 4 : 0 }}>
+            {hotLeads.map(c => (
+              <div key={c.id} onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('contacts', { kind: 'contact', id: c.id })}
+                style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                  <div className="contact-name">{c.name}</div>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{fmtDate(c.lastContact)}</span>
+                </div>
+                <div className="contact-addr">{c.addr}</div>
+                <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>{c.params}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--accent)' }}>→ {c.next}</span>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>· {fmtDate(c.nextWhen)}</span>
+                </div>
+              </div>
+            ))}
           </div>
-          {D.GOALS.map(g => (
-            <div key={g.id} className="goal">
-              <div className="goal-head">
-                <div className="goal-name">{g.name}</div>
-                <div className="goal-pct">{g.pct}%</div>
-              </div>
-              <div className="goal-bar-wrap">
-                <div className="goal-bar" style={{ width: `${g.pct}%` }} />
-              </div>
-              <div className="goal-meta">
-                <span>₽{Number(g.current).toLocaleString('ru-RU')}k</span>
-                <span>цель ₽{Number(g.target).toLocaleString('ru-RU')}k</span>
-              </div>
-            </div>
-          ))}
-          {D.GOALS.length === 0 && <div className="placeholder">Нет целей</div>}
         </div>
       </div>
     </div>

@@ -4,7 +4,6 @@ const Sidebar = ({ route, setRoute, counts, userName }) => {
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'tasks', label: 'Задачи', icon: 'tasks', count: counts.tasks },
     { id: 'calendar', label: 'Календарь', icon: 'calendar' },
-    { id: 'finance', label: 'Финансы', icon: 'finance' },
     { id: 'contacts', label: 'Контакты', icon: 'contacts', count: counts.contacts },
     { id: 'storage',  label: 'Хранилище', icon: 'storage' },
   ];
