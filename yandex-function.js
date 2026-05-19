@@ -59,6 +59,37 @@ function parseBody(event) {
 }
 
 
+// ── MAX Bot helpers ───────────────────────────────────────────────────────────
+const MAX_API = 'https://botapi.max.vk.com';
+
+async function maxSend(text) {
+  const token   = process.env.MAX_BOT_TOKEN;
+  const ownerId = process.env.MAX_OWNER_ID;
+  if (!token || !ownerId) return;
+  await fetch(`${MAX_API}/messages/sendMessage?access_token=${token}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: ownerId, message: { text } }),
+  });
+}
+
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Parse incoming MAX update → return { userId, text } or null
+function parseMaxUpdate(body) {
+  // MAX webhook sends single update (not array)
+  const upd = body;
+  if (!upd || upd.update_type !== 'message_created') return null;
+  const msg = upd.message;
+  if (!msg) return null;
+  const userId = msg.sender?.user_id || msg.sender?.userId || null;
+  const text   = msg.body?.text || msg.text || '';
+  return { userId, text: text.trim() };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports.handler = async (event) => {
   const method = event.httpMethod || 'GET';
@@ -72,6 +103,128 @@ module.exports.handler = async (event) => {
   if (!table && !action) return reply({ message: '7on OS API v2 — Yandex' });
 
   try {
+    // ── bot-setup: register MAX webhook (call once) ───────────────────────────
+    if (action === 'bot-setup') {
+      const token = process.env.MAX_BOT_TOKEN;
+      if (!token) return reply({ error: 'MAX_BOT_TOKEN not set' }, 500);
+      const webhookUrl = process.env.FUNCTION_URL + '?action=bot';
+      const r = await fetch(`${MAX_API}/subscriptions?access_token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl }),
+      });
+      const data = await r.json();
+      return reply({ ok: r.ok, max_response: data });
+    }
+
+    // ── bot: MAX webhook endpoint ─────────────────────────────────────────────
+    if (action === 'bot') {
+      const body  = parseBody(event);
+      const upd   = parseMaxUpdate(body);
+
+      // MAX sends verification GET on setup — just confirm
+      if (method === 'GET') return { statusCode: 200, headers: CORS, body: 'ok' };
+
+      if (!upd) return reply({ ok: true }); // unknown update type — ignore
+
+      const { text } = upd;
+      const token = await getToken();
+
+      // ── /task or /t — рабочая задача ───────────────────────────────────────
+      if (/^\/task\b|^\/t\b/i.test(text)) {
+        const title = text.replace(/^\/task\s*|^\/t\s*/i, '').trim();
+        if (!title) { await maxSend('✏️ Укажи название: /task Позвонить Иванову'); return reply({ ok: true }); }
+        const id = 'w' + Date.now();
+        const tasks = await getTable(token, 'tasks');
+        tasks.push({ id, title, type: 'work', priority: 'med', done: 0, due: '', time: '', tag: 'Риэлтор', description: '📱 Из MAX', reminder: -1 });
+        await saveTable(token, 'tasks', tasks);
+        await maxSend(`✅ Рабочая задача создана:\n"${title}"`);
+        return reply({ ok: true });
+      }
+
+      // ── /p — личная задача ─────────────────────────────────────────────────
+      if (/^\/p\b/i.test(text)) {
+        const title = text.replace(/^\/p\s*/i, '').trim();
+        if (!title) { await maxSend('✏️ Укажи название: /p Купить продукты'); return reply({ ok: true }); }
+        const id = 'p' + Date.now();
+        const tasks = await getTable(token, 'tasks');
+        tasks.push({ id, title, type: 'personal', priority: 'med', done: 0, due: '', time: '', tag: 'Личное', description: '📱 Из MAX', reminder: -1 });
+        await saveTable(token, 'tasks', tasks);
+        await maxSend(`✅ Личная задача создана:\n"${title}"`);
+        return reply({ ok: true });
+      }
+
+      // ── /study — учебная задача ────────────────────────────────────────────
+      if (/^\/study\b/i.test(text)) {
+        const title = text.replace(/^\/study\s*/i, '').trim();
+        if (!title) { await maxSend('✏️ Укажи название: /study Прочитать главу'); return reply({ ok: true }); }
+        const id = 'e' + Date.now();
+        const tasks = await getTable(token, 'tasks');
+        tasks.push({ id, title, type: 'study', priority: 'med', done: 0, due: '', time: '', tag: 'Учёба', description: '📱 Из MAX', reminder: -1 });
+        await saveTable(token, 'tasks', tasks);
+        await maxSend(`✅ Учебная задача создана:\n"${title}"`);
+        return reply({ ok: true });
+      }
+
+      // ── /tasks — список открытых задач ────────────────────────────────────
+      if (/^\/tasks\b/i.test(text)) {
+        const tasks = await getTable(token, 'tasks');
+        const open  = tasks.filter(t => !t.done);
+        if (!open.length) { await maxSend('📋 Открытых задач нет'); return reply({ ok: true }); }
+        const work     = open.filter(t => t.type === 'work');
+        const personal = open.filter(t => t.type === 'personal');
+        const study    = open.filter(t => t.type === 'study');
+        const lines = [`📋 Открытых задач: ${open.length}`];
+        if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,5).forEach(t => lines.push(`  • ${t.title}`)); }
+        if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,5).forEach(t => lines.push(`  • ${t.title}`)); }
+        if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,5).forEach(t => lines.push(`  • ${t.title}`)); }
+        await maxSend(lines.join('\n'));
+        return reply({ ok: true });
+      }
+
+      // ── /today — события и задачи на сегодня ─────────────────────────────
+      if (/^\/today\b/i.test(text)) {
+        const iso    = todayIso();
+        const events = await getTable(token, 'events');
+        const tasks  = await getTable(token, 'tasks');
+        const todayEvs  = events.filter(e => e.event_date === iso).sort((a,b) => a.start_time - b.start_time);
+        const todayTask = tasks.filter(t => !t.done && (t.due || '').toLowerCase().includes('сегодня'));
+        const lines = [`📅 Сегодня, ${iso}:`];
+        if (todayEvs.length) {
+          lines.push(''); lines.push('🗓 События:');
+          todayEvs.forEach(e => {
+            const t = e.start_time === -1 ? 'весь день' : `${String(Math.floor(e.start_time)).padStart(2,'0')}:00`;
+            lines.push(`  ${t} — ${e.title}`);
+          });
+        }
+        if (todayTask.length) {
+          lines.push(''); lines.push('✅ Задачи на сегодня:');
+          todayTask.forEach(t => lines.push(`  • ${t.title}`));
+        }
+        if (!todayEvs.length && !todayTask.length) lines.push('Нет событий и задач 🎉');
+        await maxSend(lines.join('\n'));
+        return reply({ ok: true });
+      }
+
+      // ── /help ─────────────────────────────────────────────────────────────
+      if (/^\/help\b|^\/start\b/i.test(text)) {
+        await maxSend(
+          '🤖 7on OS Bot\n\n' +
+          '/task [название] — рабочая задача\n' +
+          '/p [название]    — личная задача\n' +
+          '/study [название] — учебная задача\n' +
+          '/tasks           — все открытые задачи\n' +
+          '/today           — события и задачи на сегодня\n' +
+          '/help            — эта справка',
+        );
+        return reply({ ok: true });
+      }
+
+      // Неизвестная команда
+      await maxSend('❓ Не понял команду. Напиши /help для справки.');
+      return reply({ ok: true });
+    }
+
     // ── check-password: verify without exposing password in source code ─────────
     if (action === 'check-password') {
       const body = parseBody(event);
