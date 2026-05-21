@@ -149,6 +149,22 @@ const RemindersManager = ({ tasks, events }) => {
         }
       });
 
+      // Deadline reminder — fire at 9:00 on deadline day
+      (tasks || []).forEach(t => {
+        if (t.done || !t.deadline) return;
+        const dlMatch = t.deadline.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!dlMatch) return;
+        const deadlineDate = new Date(parseInt(dlMatch[1]), parseInt(dlMatch[2]) - 1, parseInt(dlMatch[3]), 9, 0, 0);
+        const diffDl = now - deadlineDate;
+        if (diffDl >= 0 && diffDl < 60000) {
+          const key = `task_${t.id}_deadline_day`;
+          if (!wasNotified(key)) {
+            fireNotification(`⏰ ${t.title}`, '🔴 Крайний срок — сегодня!', key);
+            markNotified(key);
+          }
+        }
+      });
+
       // Tasks — auto-fire at due time if time is set; advance reminder always optional
       (tasks || []).forEach(t => {
         if (t.done) return;

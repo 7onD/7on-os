@@ -66,8 +66,20 @@ const FSelect = ({ children, ...props }) => (
 const FTextarea = (props) => <textarea className="form-textarea" {...props} />;
 
 // ── TaskRow ───────────────────────────────────────────────────────────────────
-const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
+const TaskRow = ({ task, onToggle, onDelete, onOpen, dragHandleProps }) => {
   const [busy, setBusy] = useState(false);
+
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const deadlineStatus = (() => {
+    if (!task.deadline) return null;
+    if (task.deadline < _todayStr) return 'overdue';
+    if (task.deadline === _todayStr) return 'today';
+    // within 2 days
+    const d = new Date(task.deadline + 'T00:00:00');
+    const diff = (d - new Date()) / 86400000;
+    if (diff <= 2) return 'warn';
+    return 'ok';
+  })();
 
   const handleToggle = async (e) => {
     e.stopPropagation();
@@ -84,15 +96,33 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen }) => {
   };
 
   return (
-    <div className="task" data-done={task.done ? '1' : '0'} onClick={() => onOpen && onOpen(task)} style={{ cursor: onOpen ? 'pointer' : 'default' }}>
+    <div className="task" data-done={task.done ? '1' : '0'} data-has-deadline={task.deadline ? '1' : '0'}
+      onClick={() => onOpen && onOpen(task)} style={{ cursor: onOpen ? 'pointer' : 'default' }}>
+      {dragHandleProps && (
+        <div className="drag-handle" {...dragHandleProps} onClick={e => e.stopPropagation()}>
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+            <circle cx="3" cy="2.5" r="1.5"/><circle cx="7" cy="2.5" r="1.5"/>
+            <circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/>
+            <circle cx="3" cy="11.5" r="1.5"/><circle cx="7" cy="11.5" r="1.5"/>
+          </svg>
+        </div>
+      )}
       <div className={`task-priority ${task.priority}`} />
       <div className="task-check" onClick={handleToggle} style={{ cursor: 'pointer', opacity: busy ? 0.5 : 1 }} />
       <div className="task-body">
-        <div className="task-title">{task.title}</div>
+        <div className="task-title" style={deadlineStatus === 'overdue' || deadlineStatus === 'today' ? { color:'var(--red)' } : undefined}>
+          {task.title}
+        </div>
         <div className="task-meta">
           <span>{fmtDate(task.due)}{task.time && <span className="mono" style={{ marginLeft:4, opacity:0.7 }}>{task.time}</span>}</span>
           {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
           {task.description && <><span className="dot" /><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>заметка</span></>}
+          {task.deadline && !task.done && (deadlineStatus === 'overdue' || deadlineStatus === 'today' || deadlineStatus === 'warn') && (
+            <><span className="dot" />
+            <span className={`deadline-badge${deadlineStatus === 'warn' ? ' warn' : ''}`}>
+              ⏰ {deadlineStatus === 'overdue' ? 'просрочен' : deadlineStatus === 'today' ? 'сегодня' : `до ${fmtDate(task.deadline)}`}
+            </span></>
+          )}
         </div>
       </div>
       {onDelete && (

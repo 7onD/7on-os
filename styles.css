@@ -1392,6 +1392,124 @@ button {
 .preview-image-mock { width: 100%; max-width: 520px; aspect-ratio: 3/2; background: linear-gradient(135deg,#3a4a6b 0%,#1a2435 100%); border-radius: 8px; position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
 .preview-actions { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
 .section-title { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); }
+
+/* ═══ DRAG-AND-DROP ══════════════════════════════════════════════════════════ */
+.drag-handle {
+  width: 16px; height: 24px;
+  display: grid; place-items: center;
+  color: var(--text-faint);
+  cursor: grab;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+  touch-action: none;
+}
+.task:hover .drag-handle,
+.task-drag-active .drag-handle { opacity: 0.5; }
+.drag-handle:active { cursor: grabbing; }
+.task[data-dragging="1"] {
+  opacity: 0.4;
+  background: var(--surface-2);
+}
+.task[data-dragover="1"] {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+@media (max-width: 768px) {
+  .drag-handle { opacity: 0.4; }
+}
+
+/* ═══ DEADLINE ════════════════════════════════════════════════════════════════ */
+.deadline-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--red); background: rgba(255,107,122,0.1);
+  border: 1px solid rgba(255,107,122,0.25);
+  border-radius: 4px; padding: 1px 6px;
+  letter-spacing: 0.01em;
+}
+.deadline-badge.warn {
+  color: var(--orange); background: rgba(255,180,94,0.1);
+  border-color: rgba(255,180,94,0.25);
+}
+.task[data-has-deadline="1"] .task-title {
+  /* subtle red tint when deadline is near */
+}
+
+/* ═══ TASK DETAIL TITLE (textarea, wraps long text) ═════════════════════════ */
+.task-detail-title {
+  resize: none;
+  overflow: hidden;
+  min-height: 28px;
+  line-height: 1.4;
+  display: block;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* ═══ MOBILE CALENDAR — COMPACT MONTH VIEW ══════════════════════════════════ */
+.cal-month-cell {
+  background: var(--surface);
+  padding: 6px 8px;
+  cursor: pointer;
+  min-height: 90px;
+}
+@media (max-width: 768px) {
+  .cal-month-cell {
+    min-height: 58px !important;
+    padding: 4px 3px !important;
+  }
+  .cal-month-cell .month-ev-item {
+    font-size: 9px !important;
+    padding: 1px 3px !important;
+    margin-bottom: 1px !important;
+  }
+  .cal-month-cell .month-date-num {
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 10px !important;
+    margin-bottom: 2px !important;
+  }
+  /* Mobile calendar month toggle — sticky at top */
+  .cal-mobile-view-toggle {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    padding-bottom: 8px;
+  }
+  /* Fix form-row on mobile so date+time don't overflow */
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ═══ STORAGE / NOTES — ANIMATIONS ══════════════════════════════════════════ */
+.note-item { animation: fadeIn 0.22s cubic-bezier(0.16,1,0.3,1) both; }
+.file-card  { animation: scaleIn 0.22s cubic-bezier(0.16,1,0.3,1) both; }
+.storage .storage-pane { animation: fadeIn 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+.storage .storage-pane:nth-child(2) { animation-delay: 60ms; }
+.storage .storage-pane:nth-child(3) { animation-delay: 120ms; }
+
+/* ═══ CONTACT CARD — QUICK STATS ROW ════════════════════════════════════════ */
+.contact-quick-stats {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+}
+.contact-stat-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 10.5px;
+  padding: 3px 8px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.desc-link-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  font-size: 12px; color: var(--text-dim); cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.desc-link-chip:hover { background: var(--surface-3); border-color: var(--accent); }
 /* ── Description link chips ─────────────────────────────────────────────────── */
 .desc-link-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 20px; font-size: 11.5px; color: var(--text-dim); cursor: pointer; font-family: var(--font-ui); transition: all 0.14s; }
 .desc-link-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }

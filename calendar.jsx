@@ -436,11 +436,10 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             const cellDate = c.cur ? `${year}-${String(month+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}` : '';
             const evs = c.cur ? (evsByDate[cellDate] || []) : [];
             const isToday = c.cur && cellDate === todayIso;
+            const maxVisible = opts.compact ? 2 : 3;
             return (
-              <div key={i} style={{
-                background:'var(--surface)', minHeight:90, padding:'6px 8px', cursor:c.cur ? 'pointer' : 'default',
-                opacity: c.cur ? 1 : 0.3,
-              }}
+              <div key={i} className="cal-month-cell"
+                style={{ opacity: c.cur ? 1 : 0.3 }}
                 onClick={() => {
                   if (!c.cur) return;
                   if (opts.onDaySel) {
@@ -450,21 +449,21 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     setViewDayIdx(dow < 7 ? dow : 0);
                   }
                 }}>
-                <div style={{
+                <div className="month-date-num" style={{
                   width:22, height:22, borderRadius:'50%', display:'grid', placeItems:'center',
                   fontFamily:'var(--font-mono)', fontSize:11.5, fontWeight: isToday ? 700 : 400,
                   background: isToday ? 'var(--accent)' : 'transparent',
-                  color: isToday ? '#0a0a0a' : 'var(--text)', marginBottom:4,
+                  color: isToday ? '#0a0a0a' : 'var(--text)', marginBottom:4, flexShrink:0,
                 }}>{c.d}</div>
-                {evs.slice(0, 3).map(e => (
-                  <div key={e.id} style={{
+                {evs.slice(0, maxVisible).map(e => (
+                  <div key={e.id} className="month-ev-item" style={{
                     fontSize:10.5, padding:'2px 5px', borderRadius:4, marginBottom:2,
                     background: `${KIND_COLORS[e.kind] || '#888'}22`,
                     color: KIND_COLORS[e.kind] || '#888', fontWeight:500,
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
                   }} onClick={ev => { ev.stopPropagation(); openDetail(ev, e); }}>{e.title}</div>
                 ))}
-                {evs.length > 3 && <div style={{ fontSize:10, color:'var(--text-faint)', fontFamily:'var(--font-mono)' }}>+{evs.length-3}</div>}
+                {evs.length > maxVisible && <div style={{ fontSize:10, color:'var(--text-faint)', fontFamily:'var(--font-mono)' }}>+{evs.length - maxVisible}</div>}
               </div>
             );
           })}
@@ -490,9 +489,10 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         </div>
 
         {mobileView === 'month' ? (
-          /* Month view on mobile — clicking a day jumps to that day in week strip */
+          /* Month view on mobile — compact Apple-style, clicking a day jumps to week strip */
           <div>
             {renderMonthView({
+              compact: true,
               onDaySel: ({ year, month, day, dow }) => {
                 const clickDate = new Date(year, month, day);
                 const newOffset = Math.floor((clickDate.setHours(0,0,0,0) - BASE_MON.getTime()) / (7 * 24 * 60 * 60 * 1000));

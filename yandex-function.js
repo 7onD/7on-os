@@ -219,7 +219,10 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
     getNotified(storToken),
   ]);
 
-  const now = new Date();
+  // Adjust for Moscow time (UTC+3): server runs in UTC, user times are Moscow.
+  // Adding 3h to now makes "now" expressed in Moscow wall-clock terms,
+  // so comparisons with dates constructed from user-inputted hours are correct.
+  const now = new Date(new Date().getTime() + 3 * 3600 * 1000);
   const WINDOW_MS = force ? Infinity : 5 * 60 * 1000;
   const msgs = [];
   const debugInfo = debug ? { now: now.toISOString(), tasks: [], events: [] } : null;
@@ -296,6 +299,22 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
       }
     } else {
       if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, due: t.due, reminder: mins, skip: 'no time set and no advance reminder' });
+    }
+  });
+
+  // Check deadline reminders — always fire 2h before end of deadline day (22:00 Moscow)
+  tasks.forEach(t => {
+    if (t.done || !t.deadline) return;
+    const dlMatch = t.deadline.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!dlMatch) return;
+    const [, dy, dm, dd] = dlMatch.map(Number);
+    // 22:00 Moscow = 22:00 in our +3h adjusted time
+    const fireAt = new Date(dy, dm - 1, dd, 22, 0, 0);
+    const diffDl = now - fireAt;
+    const keyDl = `task_${t.id}_deadline_2h`;
+    if (debugInfo) debugInfo.tasks.push({ id: t.id, title: t.title, deadline: t.deadline, fireAt: fireAt.toISOString(), diffMin: Math.round(diffDl/60000), alreadyNotified: !!notified[keyDl] });
+    if (diffDl >= 0 && diffDl < WINDOW_MS && !notified[keyDl]) {
+      msgs.push({ key: keyDl, text: `⏰ <b>${t.title}</b>\n🔴 Крайний срок — сегодня!` });
     }
   });
 

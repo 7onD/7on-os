@@ -280,51 +280,72 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </button>
             )}
 
+            {/* Header: name + status + phone */}
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:16, fontWeight:500, letterSpacing:'-0.01em' }}>{cur.name}</div>
-              <div className="mono" style={{ fontSize:12, color:'var(--text-dim)', marginTop:4 }}>{cur.phone}</div>
-              <div style={{ marginTop:10 }}><StatusTag status={cur.status} /></div>
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8, marginBottom:6 }}>
+                <div style={{ fontSize:16, fontWeight:500, letterSpacing:'-0.01em', flex:1, minWidth:0 }}>{cur.name}</div>
+                <StatusTag status={cur.status} />
+              </div>
+              <a href={`tel:${cur.phone}`} className="mono" style={{ fontSize:12.5, color:'var(--accent)', textDecoration:'none', display:'inline-block' }}>
+                {cur.phone}
+              </a>
+              {/* Quick stats row */}
+              <div className="contact-quick-stats">
+                <span className="contact-stat-chip" style={{ color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--green)' }}>
+                  📞 {cur.daysSince === 0 ? 'сегодня' : `${cur.daysSince} дн. назад`}
+                </span>
+                {cur.nextWhen && (
+                  <span className="contact-stat-chip" style={{ color:'var(--accent)' }}>
+                    📅 {fmtDate(cur.nextWhen)}
+                  </span>
+                )}
+                {cur.lastContact && (
+                  <span className="contact-stat-chip">
+                    посл. {fmtDate(cur.lastContact)}
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div style={{ borderTop:'1px solid var(--border)', paddingTop:14 }}>
-              <div className="stat-label">Объект</div>
-              <div style={{ fontSize:13.5, marginTop:4 }}>{cur.addr}</div>
-              <div className="mono" style={{ fontSize:11.5, color:'var(--text-dim)', marginTop:6, lineHeight:1.6 }}>
-                {(cur.params || '').split('·').map((p, i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', borderBottom:'1px dashed var(--border)', padding:'3px 0' }}>
-                    <span style={{ color:'var(--text-faint)' }}>{['Площадь','Комнат','Этаж','Цена'][i] || ''}</span>
-                    <span>{p.trim()}</span>
+            {/* Object block */}
+            {(cur.addr || cur.params) && (
+              <div style={{ borderTop:'1px solid var(--border)', paddingTop:12, marginBottom:12 }}>
+                <div className="stat-label">Объект</div>
+                {cur.addr && <div style={{ fontSize:13, marginTop:4, fontWeight:500 }}>{cur.addr}</div>}
+                {cur.params && (
+                  <div className="mono" style={{ fontSize:11, color:'var(--text-dim)', marginTop:4, lineHeight:1.6 }}>
+                    {(cur.params || '').split('·').map((p, i) => (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'2px 0', borderBottom:'1px dashed var(--border)' }}>
+                        <span style={{ color:'var(--text-faint)' }}>{['Площадь','Комнат','Этаж','Цена'][i] || ''}</span>
+                        <span>{p.trim()}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginTop:14 }}>
-              <div style={{ display:'flex', justifyContent:'space-between' }}>
-                <div className="stat-label">Последний контакт</div>
-                <div className="mono" style={{ fontSize:11, color:'var(--text-dim)' }}>{fmtDate(cur.lastContact)}</div>
-              </div>
-              <div className="mono" style={{ fontSize:10.5, color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)', marginTop:2 }}>
-                {cur.daysSince} {cur.daysSince === 1 ? 'день' : 'дн.'} назад
-              </div>
-            </div>
-
-            {cur.notes && (
-              <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginTop:14 }}>
-                <div className="stat-label">Заметки</div>
-                <div style={{ fontSize:12.5, color:'var(--text-dim)', marginTop:6, lineHeight:1.55 }}>{cur.notes}</div>
+                )}
               </div>
             )}
 
-            <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginTop:14 }}>
-              <div className="stat-label">Следующий шаг</div>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:8, padding:10, background:'var(--surface-2)', borderRadius:8 }}>
-                <div style={{ width:3, height:28, borderRadius:2, background:'var(--accent)', flexShrink:0 }} />
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12.5 }}>{cur.next}</div>
-                  <div className="mono" style={{ fontSize:10.5, color:'var(--accent)' }}>{fmtDate(cur.nextWhen)}</div>
+            {/* Next step block */}
+            {(cur.next || cur.nextWhen) && (
+              <div style={{ borderTop:'1px solid var(--border)', paddingTop:12, marginBottom:12 }}>
+                <div className="stat-label">Следующий шаг</div>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6, padding:'8px 10px', background:'var(--surface-2)', borderRadius:8 }}>
+                  <div style={{ width:3, alignSelf:'stretch', borderRadius:2, background:'var(--accent)', flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12.5, fontWeight:450 }}>{cur.next}</div>
+                    <div className="mono" style={{ fontSize:10.5, color:'var(--accent)', marginTop:2 }}>{fmtDate(cur.nextWhen)}</div>
+                  </div>
                 </div>
               </div>
+            )}
+
+            {/* Notes block — always visible */}
+            <div style={{ borderTop:'1px solid var(--border)', paddingTop:12, marginBottom:12 }}>
+              <div className="stat-label">Заметки</div>
+              {cur.notes
+                ? <div style={{ fontSize:12.5, color:'var(--text-dim)', marginTop:6, lineHeight:1.55 }}>{cur.notes}</div>
+                : <div style={{ fontSize:11.5, color:'var(--text-faint)', marginTop:4, fontFamily:'var(--font-mono)' }}>нет заметок</div>
+              }
             </div>
 
             <div style={{ display:'flex', gap:6, marginTop:14 }}>

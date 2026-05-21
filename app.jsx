@@ -112,8 +112,12 @@ const SearchOverlay = ({ query, D, setRoute, onClose }) => {
     .filter(c => c.name.toLowerCase().includes(q) || (c.addr || '').toLowerCase().includes(q)).slice(0, 4);
   const events = D.EVENTS
     .filter(e => e.title.toLowerCase().includes(q)).slice(0, 4);
+  const notes = (D.NOTES || [])
+    .filter(n => n.title.toLowerCase().includes(q) || (n.preview || '').toLowerCase().includes(q)).slice(0, 4);
+  const files = (D.FILES || [])
+    .filter(f => f.name.toLowerCase().includes(q)).slice(0, 4);
 
-  const total = tasks.length + contacts.length + events.length;
+  const total = tasks.length + contacts.length + events.length + notes.length + files.length;
   const go = (route, kind, id) => {
     if (window.SEVEN_NAV) window.SEVEN_NAV(route, kind && id ? { kind, id } : null);
     else setRoute(route);
@@ -157,6 +161,31 @@ const SearchOverlay = ({ query, D, setRoute, onClose }) => {
               {events.map(e => (
                 <button key={e.id} className="search-result" onClick={() => go('calendar', 'event', e.id)}>
                   <span className="search-result-title">{e.title}</span>
+                  {e.event_date && <span className="search-result-meta">{fmtDate(e.event_date)}</span>}
+                </button>
+              ))}
+            </>
+          )}
+          {notes.length > 0 && (
+            <>
+              <div className="search-group-label">Заметки</div>
+              {notes.map(n => (
+                <button key={n.id} className="search-result" onClick={() => go('storage', 'note', n.id)}>
+                  <span style={{ fontSize:14, flexShrink:0, opacity:0.7 }}>📝</span>
+                  <span className="search-result-title">{n.title}</span>
+                  {n.preview && <span className="search-result-meta" style={{ maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{n.preview}</span>}
+                </button>
+              ))}
+            </>
+          )}
+          {files.length > 0 && (
+            <>
+              <div className="search-group-label">Файлы</div>
+              {files.map(f => (
+                <button key={f.id} className="search-result" onClick={() => go('storage', 'file', f.id)}>
+                  <span style={{ fontSize:14, flexShrink:0, opacity:0.7 }}>📎</span>
+                  <span className="search-result-title">{f.name}</span>
+                  {f.size && <span className="search-result-meta">{f.size}</span>}
                 </button>
               ))}
             </>

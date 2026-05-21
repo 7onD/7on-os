@@ -61,6 +61,39 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
   const handleOpen = (task) => { if (window.SEVEN_NAV) window.SEVEN_NAV('tasks', { kind: 'task', id: task.id }); };
 
+  // Drag-and-drop reorder for dashboard task lists
+  const dashDragState = React.useRef({ from: null, to: null, list: null });
+  const [dashDragging, setDashDragging] = React.useState(null);
+  const [dashDragOver, setDashDragOver] = React.useState(null);
+  const handleDashDragStart = (list, idx) => { dashDragState.current = { from: idx, to: idx, list }; setDashDragging(`${list}-${idx}`); };
+  const handleDashDragOver = (e, list, idx) => { e.preventDefault(); if (dashDragState.current.list === list) { dashDragState.current.to = idx; setDashDragOver(`${list}-${idx}`); } };
+  const handleDashDrop = async (tasks) => {
+    const { from, to, list } = dashDragState.current;
+    setDashDragging(null); setDashDragOver(null);
+    dashDragState.current = { from: null, to: null, list: null };
+    if (from !== null && to !== null && from !== to) {
+      const next = [...tasks];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      await Promise.all(next.map((t, i) => updateTask(t.id, { sort_order: i })));
+      await refresh();
+    }
+  };
+
+  const renderDashTaskList = (tasks, listKey) => tasks.slice(0, 5).map((t, i) => (
+    <div key={t.id}
+      draggable
+      onDragStart={() => handleDashDragStart(listKey, i)}
+      onDragOver={e => handleDashDragOver(e, listKey, i)}
+      onDrop={() => handleDashDrop(tasks)}
+      data-dragging={dashDragging === `${listKey}-${i}` ? '1' : '0'}
+      data-dragover={dashDragOver === `${listKey}-${i}` && dashDragging !== `${listKey}-${i}` ? '1' : '0'}
+      style={{ transition:'opacity 0.12s' }}>
+      <TaskRow task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen}
+        dragHandleProps={{ onMouseDown: e => e.stopPropagation() }} />
+    </div>
+  ));
+
   return (
     <div>
       <div className="grid cols-12">
@@ -95,7 +128,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {D.PERSONAL_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />)}
+            {renderDashTaskList(D.PERSONAL_TASKS, 'personal')}
           </div>
           {D.PERSONAL_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
@@ -110,7 +143,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {D.WORK_TASKS.slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />)}
+            {renderDashTaskList(D.WORK_TASKS, 'work')}
           </div>
           {D.WORK_TASKS.length === 0 && <div className="placeholder">Нет задач</div>}
         </div>
@@ -125,7 +158,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {(D.STUDY_TASKS || []).slice(0, 5).map(t => <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />)}
+            {renderDashTaskList(D.STUDY_TASKS || [], 'study')}
           </div>
           {(D.STUDY_TASKS || []).length === 0 && <div className="placeholder">Нет задач</div>}
         </div>

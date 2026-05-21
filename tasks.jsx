@@ -1,9 +1,137 @@
 // 7on OS — Tasks page
+
+// ── TaskDragList — drag-to-reorder task list (module-level, stable reference) ─
+const TaskDragList = ({ tasks, onToggle, onDelete, onOpen, onReorder }) => {
+  const [localTasks, setLocalTasks] = React.useState(tasks);
+  const [draggingIdx, setDraggingIdx] = React.useState(null);
+  const [dragOverIdx, setDragOverIdx] = React.useState(null);
+  const dragState = React.useRef({});
+  const touchState = React.useRef({});
+  const listRef = React.useRef(null);
+
+  // Sync when parent tasks prop changes (e.g. after refresh)
+  React.useEffect(() => { setLocalTasks(tasks); }, [tasks]);
+
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const isDueToday = (due) => !!due && (due === _todayStr || due.toLowerCase().startsWith('сегодня'));
+
+  // ── HTML5 drag ─────────────────────────────────────────────────────────────
+  const handleDragStart = (idx) => {
+    dragState.current.from = idx;
+    setDraggingIdx(idx);
+  };
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragState.current.from !== idx) setDragOverIdx(idx);
+  };
+  const handleDrop = (idx) => {
+    const from = dragState.current.from;
+    if (from == null || from === idx) { setDraggingIdx(null); setDragOverIdx(null); return; }
+    const next = [...localTasks];
+    const [item] = next.splice(from, 1);
+    next.splice(idx, 0, item);
+    setLocalTasks(next);
+    setDraggingIdx(null);
+    setDragOverIdx(null);
+    dragState.current = {};
+    onReorder && onReorder(next);
+  };
+  const handleDragEnd = () => { setDraggingIdx(null); setDragOverIdx(null); dragState.current = {}; };
+
+  // ── Touch drag ─────────────────────────────────────────────────────────────
+  const handleTouchStart = (e, idx) => {
+    const t = e.touches[0];
+    touchState.current = { from: idx, startY: t.clientY, startX: t.clientX, moved: false };
+    setDraggingIdx(idx);
+  };
+  const handleTouchMove = (e) => {
+    if (touchState.current.from == null) return;
+    const t = e.touches[0];
+    const dy = Math.abs(t.clientY - touchState.current.startY);
+    const dx = Math.abs(t.clientX - touchState.current.startX);
+    if (dy < 6 && dx < 6) return;
+    touchState.current.moved = true;
+    e.preventDefault();
+    if (!listRef.current) return;
+    const items = listRef.current.querySelectorAll('[data-drag-idx]');
+    let over = null;
+    items.forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (t.clientY >= r.top && t.clientY <= r.bottom) over = parseInt(el.dataset.dragIdx);
+    });
+    if (over !== null && over !== touchState.current.from) setDragOverIdx(over);
+  };
+  const handleTouchEnd = () => {
+    const { from, moved } = touchState.current;
+    if (moved && dragOverIdx !== null && from !== dragOverIdx) {
+      const next = [...localTasks];
+      const [item] = next.splice(from, 1);
+      next.splice(dragOverIdx, 0, item);
+      setLocalTasks(next);
+      onReorder && onReorder(next);
+    }
+    setDraggingIdx(null);
+    setDragOverIdx(null);
+    touchState.current = {};
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const today = localTasks.filter(t => !t.done && isDueToday(t.due));
+  const later = localTasks.filter(t => !t.done && !isDueToday(t.due));
+  const done  = localTasks.filter(t => t.done);
+
+  const renderItem = (t, idx) => (
+    <div key={t.id} data-drag-idx={idx}
+      draggable
+      onDragStart={() => handleDragStart(idx)}
+      onDragOver={e => handleDragOver(e, idx)}
+      onDrop={() => handleDrop(idx)}
+      onDragEnd={handleDragEnd}
+      onTouchStart={e => handleTouchStart(e, idx)}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      data-dragging={draggingIdx === idx ? '1' : '0'}
+      data-dragover={dragOverIdx === idx && draggingIdx !== idx ? '1' : '0'}
+      style={{ touchAction: 'none', transition: 'opacity 0.12s' }}>
+      <TaskRow task={t} onToggle={onToggle} onDelete={onDelete} onOpen={onOpen}
+        dragHandleProps={{ className: 'drag-handle' }} />
+    </div>
+  );
+
+  return (
+    <div ref={listRef}>
+      {today.length > 0 && (
+        <div>
+          <div className="section-label" style={{ fontSize:11, opacity:0.5, padding:'6px 0 2px' }}>Сегодня</div>
+          {today.map((t, i) => renderItem(t, localTasks.indexOf(t)))}
+        </div>
+      )}
+      {later.length > 0 && (
+        <div>
+          {today.length > 0 && <div className="section-label" style={{ fontSize:11, opacity:0.5, padding:'6px 0 2px' }}>Позже</div>}
+          {later.map((t) => renderItem(t, localTasks.indexOf(t)))}
+        </div>
+      )}
+      {done.length > 0 && (
+        <div>
+          <div className="section-label" style={{ fontSize:11, opacity:0.5, padding:'6px 0 2px' }}>Выполнено</div>
+          {done.map((t) => renderItem(t, localTasks.indexOf(t)))}
+        </div>
+      )}
+      {localTasks.length === 0 && (
+        <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-dim)', fontSize:13 }}>
+          Нет задач
+        </div>
+      )}
+    </div>
+  );
+};
+
 const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [filter, setFilter] = React.useState('all');
   const [sort, setSort]     = React.useState('date');
   const [showAdd, setShowAdd] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
+  const [form, setForm] = React.useState({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1', deadline: '' });
   const [saving, setSaving] = React.useState(false);
   const [detailTask, setDetailTask] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
@@ -17,9 +145,12 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     const copy = [...list];
     if (sort === 'priority') return copy.sort((a, b) => (PRIO_ORDER[a.priority] ?? 1) - (PRIO_ORDER[b.priority] ?? 1));
     if (sort === 'alpha')    return copy.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
-    // 'date': done tasks at bottom, then by due string (empty last)
+    // 'date': done tasks at bottom, then by sort_order (manual), then by due string
     return copy.sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
+      if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
+      if (a.sort_order != null) return -1;
+      if (b.sort_order != null) return 1;
       if (!a.due && !b.due) return 0;
       if (!a.due) return 1;
       if (!b.due) return -1;
@@ -56,10 +187,10 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     setSaving(true);
     try {
       const effectiveTag = form.tag.trim() || TYPE_TAG_DEFAULT[form.type] || 'Личное';
-      await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder) });
+      await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder), deadline: form.deadline || null });
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1' });
+      setForm({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1', deadline: '' });
     } finally { setSaving(false); }
   };
 
@@ -74,6 +205,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       tag: task.tag || TYPE_TAG_DEFAULT[task.type] || 'Личное',
       done: task.done || false,
       reminder: String(task.reminder ?? '-1'),
+      deadline: task.deadline || '',
     });
   };
 
@@ -91,6 +223,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         tag: effectiveTag,
         done: detailForm.done,
         reminder: parseInt(detailForm.reminder),
+        deadline: detailForm.deadline || null,
       });
       await refresh();
       setDetailTask(null);
@@ -137,30 +270,11 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <Icon name="plus" size={13} /> Задача
         </button>
       </div>
-
-      {tasks.filter(t => isDueToday(t.due)).length > 0 && (
-        <>
-          <div className="stat-label" style={{ marginTop:4 }}>Сегодня</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {tasks.filter(t => isDueToday(t.due)).map(t =>
-              <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
-            )}
-          </div>
-        </>
-      )}
-
-      {tasks.filter(t => !isDueToday(t.due)).length > 0 && (
-        <>
-          <div className="stat-label" style={{ marginTop:16 }}>Позже</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {tasks.filter(t => !isDueToday(t.due)).map(t =>
-              <TaskRow key={t.id} task={t} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
-            )}
-          </div>
-        </>
-      )}
-
-      {tasks.length === 0 && <div className="placeholder" style={{ marginTop:8 }}>Нет задач</div>}
+      <TaskDragList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail}
+        onReorder={async (newTasks) => {
+          await Promise.all(newTasks.map((t, i) => updateTask(t.id, { sort_order: i })));
+          await refresh();
+        }} />
     </div>
   );
 
@@ -176,10 +290,17 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               onChange={e => set('title', e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAdd()} autoFocus />
           </Field>
-          <div className="form-row">
+          <div className="form-row" style={{ gridTemplateColumns:'1fr 1fr' }}>
             <Field label="Срок"><FInput type="date" value={form.due} onChange={e => set('due', e.target.value)} /></Field>
             <Field label="Время"><FInput type="time" value={form.time} onChange={e => set('time', e.target.value)} /></Field>
           </div>
+          <Field label="Крайний срок (дедлайн)">
+            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+              <FInput type="date" value={form.deadline} onChange={e => set('deadline', e.target.value)}
+                style={{ flex:1, ...(form.deadline ? { borderColor:'rgba(255,107,122,0.5)', color:'var(--red)' } : {}) }} />
+              {form.deadline && <button type="button" className="icon-btn" style={{ width:26, height:26, flexShrink:0 }} onClick={() => set('deadline','')}>×</button>}
+            </div>
+          </Field>
           <div className="form-row">
             <Field label="Приоритет">
               <FSelect value={form.priority} onChange={e => set('priority', e.target.value)}>
@@ -215,8 +336,14 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <button className="task-detail-check" data-done={detailForm.done ? '1' : '0'} onClick={handleDetailToggle} title="Выполнено">
                 {detailForm.done ? <Icon name="check" size={14} /> : null}
               </button>
-              <input className="task-detail-title" value={detailForm.title}
-                onChange={e => setD('title', e.target.value)}
+              <textarea className="task-detail-title" value={detailForm.title}
+                onChange={e => {
+                  setD('title', e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onFocus={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                rows={1}
                 placeholder="Название задачи" />
               <button className="icon-btn" onClick={() => setDetailTask(null)}><Icon name="x" size={14} /></button>
             </div>
@@ -229,6 +356,14 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     style={{ fontSize:13, flex:1 }} />
                   <FInput type="time" value={detailForm.time || ''} onChange={e => setD('time', e.target.value)}
                     style={{ fontSize:13, width:110, marginLeft:8 }} />
+                </div>
+                <div className="task-detail-row">
+                  <span className="stat-label" style={{ minWidth:80, color:'var(--red)', opacity: detailForm.deadline ? 1 : 0.5 }}>Дедлайн</span>
+                  <div style={{ display:'flex', gap:6, alignItems:'center', flex:1 }}>
+                    <FInput type="date" value={detailForm.deadline || ''} onChange={e => setD('deadline', e.target.value)}
+                      style={{ fontSize:13, flex:1, ...(detailForm.deadline ? { borderColor:'rgba(255,107,122,0.5)', color:'var(--red)' } : {}) }} />
+                    {detailForm.deadline && <button type="button" className="icon-btn" style={{ width:24, height:24, flexShrink:0 }} onClick={() => setD('deadline','')}>×</button>}
+                  </div>
                 </div>
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Приоритет</span>
