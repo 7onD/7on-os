@@ -11,7 +11,6 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [viewDayIdx, setViewDayIdx] = React.useState(0);    // 0-6 for day view
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
   const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
-  const [mobileView, setMobileView]     = React.useState('week'); // 'week' | 'month'
   const [monthSelDate, setMonthSelDate] = React.useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; });
   const [newTagName, setNewTagName]     = React.useState('');
   const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
@@ -584,11 +583,11 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="cal-mobile">
         {/* View toggle — sticky so always reachable while scrolling */}
         <div className="cal-mobile-view-toggle" style={{ display:'flex', gap:6 }}>
-          <button className="filter" data-on={mobileView==='week'?'1':'0'} onClick={() => setMobileView('week')}>Неделя</button>
-          <button className="filter" data-on={mobileView==='month'?'1':'0'} onClick={() => setMobileView('month')}>Месяц</button>
+          <button className="filter" data-on={calView==='week'?'1':'0'} onClick={() => setCalView('week')}>Неделя</button>
+          <button className="filter" data-on={calView==='month'?'1':'0'} onClick={() => setCalView('month')}>Месяц</button>
         </div>
 
-        {mobileView === 'month' ? (
+        {calView === 'month' ? (
           /* Month view on mobile — Apple-style: compact grid + day list below */
           <div>
             {renderMonthView({
