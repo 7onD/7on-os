@@ -388,5 +388,141 @@ const DescriptionWithLinks = ({ value, onChange, placeholder, style, minHeight =
   );
 };
 
-Object.assign(window, { TaskRow, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea,
+// ── TaskDragList ──────────────────────────────────────────────────────────────
+// Module-level component (stable reference). Handles PC drag and mobile touch drag.
+const TaskDragList = ({ tasks, onToggle, onDelete, onOpen, onReorder }) => {
+  const [localTasks, setLocalTasks] = React.useState(tasks);
+  const [draggingIdx, setDraggingIdx] = React.useState(null);
+  const [dragOverIdx, setDragOverIdx] = React.useState(null);
+  const S = React.useRef({ from: null, over: null, tasks });
+  const onReorderRef = React.useRef(onReorder);
+  const listRef = React.useRef(null);
+
+  React.useEffect(() => { S.current.tasks = tasks; setLocalTasks(tasks); }, [tasks]);
+  React.useEffect(() => { onReorderRef.current = onReorder; }, [onReorder]);
+
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const isDueToday = (due) => !!due && (due === _todayStr || (typeof due === 'string' && due.toLowerCase().startsWith('сегодня')));
+
+  // PC drag
+  const pcDragStart = (e, idx) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+    S.current.from = idx;
+    setDraggingIdx(idx);
+  };
+  const pcDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (S.current.from !== idx) { S.current.over = idx; setDragOverIdx(idx); }
+  };
+  const pcDrop = (e, idx) => {
+    e.preventDefault();
+    const from = S.current.from;
+    S.current.from = null; S.current.over = null;
+    setDraggingIdx(null); setDragOverIdx(null);
+    if (from == null || from === idx) return;
+    const next = [...S.current.tasks];
+    const [item] = next.splice(from, 1);
+    next.splice(idx, 0, item);
+    S.current.tasks = next;
+    setLocalTasks(next);
+    onReorderRef.current && onReorderRef.current(next);
+  };
+  const pcDragEnd = () => { S.current.from = null; S.current.over = null; setDraggingIdx(null); setDragOverIdx(null); };
+
+  // Touch drag — imperative non-passive listeners so preventDefault works
+  const touchRef = React.useRef({ from: null, startY: 0, moved: false });
+  React.useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const getIdx = (y) => {
+      for (const item of el.querySelectorAll('[data-drag-idx]')) {
+        const r = item.getBoundingClientRect();
+        if (y >= r.top && y <= r.bottom) return parseInt(item.dataset.dragIdx);
+      }
+      return null;
+    };
+    const onStart = (e) => {
+      if (!e.target.closest('.drag-handle')) return;
+      const item = e.target.closest('[data-drag-idx]');
+      if (!item) return;
+      const idx = parseInt(item.dataset.dragIdx);
+      touchRef.current = { from: idx, startY: e.touches[0].clientY, moved: false };
+      S.current.from = idx; S.current.over = null;
+      setDraggingIdx(idx);
+    };
+    const onMove = (e) => {
+      if (touchRef.current.from == null) return;
+      const dy = Math.abs(e.touches[0].clientY - touchRef.current.startY);
+      if (dy > 5) { touchRef.current.moved = true; e.preventDefault(); }
+      if (!touchRef.current.moved) return;
+      const over = getIdx(e.touches[0].clientY);
+      if (over !== null && over !== touchRef.current.from) { S.current.over = over; setDragOverIdx(over); }
+    };
+    const onEnd = () => {
+      const { from, moved } = touchRef.current;
+      const over = S.current.over;
+      touchRef.current = { from: null, startY: 0, moved: false };
+      S.current.from = null; S.current.over = null;
+      setDraggingIdx(null); setDragOverIdx(null);
+      if (moved && from != null && over != null && from !== over) {
+        const next = [...S.current.tasks];
+        const [item] = next.splice(from, 1);
+        next.splice(over, 0, item);
+        S.current.tasks = next;
+        setLocalTasks(next);
+        onReorderRef.current && onReorderRef.current(next);
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove',  onMove,  { passive: false });
+    el.addEventListener('touchend',   onEnd,   { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove',  onMove);
+      el.removeEventListener('touchend',   onEnd);
+    };
+  }, []);
+
+  // Build sections preserving flat indices
+  const sections = [];
+  let curG = null;
+  localTasks.forEach((t, idx) => {
+    const g = t.done ? 'done' : isDueToday(t.due) ? 'today' : 'later';
+    if (g !== curG) { sections.push({ g, items: [] }); curG = g; }
+    sections[sections.length - 1].items.push({ t, idx });
+  });
+  const LABELS = { today: 'Сегодня', later: 'Позже', done: 'Выполнено' };
+  const multiSection = sections.length > 1 || (sections[0] && sections[0].g !== 'later');
+
+  return (
+    <div ref={listRef}>
+      {sections.map(({ g, items }) => (
+        <div key={g}>
+          {multiSection && <div style={{ fontSize:10.5, opacity:0.4, padding:'6px 4px 2px', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em' }}>{LABELS[g]}</div>}
+          {items.map(({ t, idx }) => (
+            <div key={t.id} data-drag-idx={idx}
+              draggable
+              onDragStart={e => pcDragStart(e, idx)}
+              onDragOver={e => pcDragOver(e, idx)}
+              onDrop={e => pcDrop(e, idx)}
+              onDragEnd={pcDragEnd}
+              data-dragging={draggingIdx === idx ? '1' : '0'}
+              data-dragover={dragOverIdx === idx && draggingIdx !== idx ? '1' : '0'}
+              style={{ transition:'opacity 0.12s' }}>
+              <TaskRow task={t} onToggle={onToggle} onDelete={onDelete} onOpen={onOpen}
+                dragHandleProps={{ title:'Перетащить' }} />
+            </div>
+          ))}
+        </div>
+      ))}
+      {localTasks.length === 0 && (
+        <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-dim)', fontSize:13 }}>Нет задач</div>
+      )}
+    </div>
+  );
+};
+
+Object.assign(window, { TaskRow, TaskDragList, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea,
   SlashLinkMenu, DescriptionWithLinks, extractLinks, stripLinks });

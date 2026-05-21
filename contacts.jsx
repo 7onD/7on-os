@@ -242,9 +242,10 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   </div>
                   {c.phone && <div className="contact-phone">{c.phone}</div>}
                   <div className="contact-mobile-info">
+                    <span style={{ color: c.status==='hot'?'var(--red)':c.status==='work'?'var(--accent)':c.status==='warm'?'var(--orange)':'var(--text-faint)' }}>
+                      {D.STATUS_LABEL[c.status] || c.status}
+                    </span>
                     {c.addr && <span>{c.addr}</span>}
-                    {c.lastContact && <span style={{ color: c.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)' }}>{c.daysSince === 0 ? 'сегодня' : `${c.daysSince} дн.`}</span>}
-                    {c.next && <span style={{ color:'var(--text-faint)' }}>{c.next}</span>}
                   </div>
                 </div>
                 <div className="contact-col-hide">
