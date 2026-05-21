@@ -12,7 +12,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
   const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
   const [mobileView, setMobileView]     = React.useState('week'); // 'week' | 'month'
-  const [monthSelDate, setMonthSelDate] = React.useState(todayIso); // selected date in mobile month view
+  const [monthSelDate, setMonthSelDate] = React.useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; });
   const [newTagName, setNewTagName]     = React.useState('');
   const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
   const [savingTag, setSavingTag]       = React.useState(false);
@@ -598,6 +598,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             })}
             {/* Day event list — updates when you tap a cell */}
             {(() => {
+              if (!monthSelDate) return null;
               const [sy, sm, sd] = monthSelDate.split('-').map(Number);
               const selDateObj = new Date(sy, sm - 1, sd);
               const selDow = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][selDateObj.getDay()];
