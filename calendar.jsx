@@ -158,11 +158,12 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const [expandedStack, setExpandedStack] = React.useState(null);
+  // Bubble-phase listener so stopPropagation inside the dropdown works correctly
   React.useEffect(() => {
     if (!expandedStack) return;
-    const close = () => setExpandedStack(null);
-    document.addEventListener('click', close, true);
-    return () => document.removeEventListener('click', close, true);
+    const close = (e) => setExpandedStack(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
   }, [expandedStack]);
 
   const renderEventStack = (group, stackKey) => {
@@ -172,25 +173,23 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     const height = Math.max((maxEnd - minStart) * cellH - 8, 28);
     const first  = group[0];
     const color  = KIND_COLORS[first.kind] || '#888';
+    const c2     = group.length > 1 ? (KIND_COLORS[group[1].kind] || color) : color;
+    const c3     = group.length > 2 ? (KIND_COLORS[group[2].kind] || color) : c2;
     const isExpanded = expandedStack === stackKey;
     const hasMany = group.length > 1;
 
+    // Box-shadow simulates stacked paper cards behind the face card
+    const stackShadow = hasMany
+      ? `3px 3px 0 0 ${c2}70, ${group.length > 2 ? `6px 6px 0 0 ${c3}45` : `3px 3px 0 1px ${c2}30`}`
+      : undefined;
+
     return (
       <div key={stackKey} style={{ position:'absolute', top, left:2, right:2, zIndex: isExpanded ? 20 : 2 }}>
-        {/* Shadow cards for depth effect */}
-        {hasMany && group.slice(1, 3).map((ev, si) => (
-          <div key={ev.id} style={{
-            position:'absolute', inset:0, borderRadius:6, pointerEvents:'none',
-            background:`${KIND_COLORS[ev.kind] || color}20`,
-            border:`1px solid ${KIND_COLORS[ev.kind] || color}40`,
-            transform:`translate(${(si+1)*3}px, ${(si+1)*3}px)`,
-            zIndex:-(si+1),
-          }} />
-        ))}
-
-        {/* Face card */}
+        {/* Face card — box-shadow gives depth without extra DOM elements */}
         <div className="fcal-event"
-          style={{ position:'relative', height, background:`${color}22`, borderLeftColor:color, color, cursor:'pointer', left:0, right:'auto', width:'100%', boxSizing:'border-box' }}
+          style={{ position:'relative', height, background:`${color}22`, borderLeftColor:color, color,
+            cursor:'pointer', left:0, right:'auto', width:'100%', boxSizing:'border-box',
+            boxShadow: stackShadow }}
           onClick={e => { e.stopPropagation(); hasMany ? setExpandedStack(isExpanded ? null : stackKey) : openDetail(e, first); }}>
           <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', paddingRight: hasMany ? 22 : 14 }}>{first.title}</div>
           <div className="when">{formatTime(first.start)} – {formatTime(first.end)}</div>
@@ -203,7 +202,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             style={{ position:'absolute', top:3, right:3, background:'none', border:'none', cursor:'pointer', color:'inherit', padding:'1px 3px', opacity:0.5, fontSize:13 }}>×</button>
         </div>
 
-        {/* Expanded list */}
+        {/* Expanded list — stopPropagation prevents bubble-phase document listener from closing it */}
         {isExpanded && (
           <div style={{ position:'absolute', top:height + 4, left:0, right:0, minWidth:180, zIndex:40,
             background:'var(--surface-2)', border:'1px solid var(--border-strong)', borderRadius:8,
@@ -217,12 +216,12 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', cursor:'pointer',
                     borderLeft:`3px solid ${c}`, background:`${c}12`,
                     borderBottom: i < group.length - 1 ? '1px solid var(--border)' : 'none' }}
-                  onClick={e => { setExpandedStack(null); openDetail(e, ev); }}>
+                  onClick={e => { e.stopPropagation(); setExpandedStack(null); openDetail(e, ev); }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:500, color:c, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{ev.title}</div>
                     <div style={{ fontSize:10.5, color:'var(--text-dim)', fontFamily:'var(--font-mono)', marginTop:2 }}>{formatTime(ev.start)} – {formatTime(ev.end)}</div>
                   </div>
-                  <button onClick={e2 => { e2.stopPropagation(); setExpandedStack(null); handleDeleteFromGrid(ev.id); }}
+                  <button onClick={e => { e.stopPropagation(); setExpandedStack(null); handleDeleteFromGrid(ev.id); }}
                     style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', fontSize:14, padding:'0 2px', flexShrink:0 }}>×</button>
                 </div>
               );
