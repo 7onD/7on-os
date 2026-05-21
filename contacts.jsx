@@ -236,8 +236,16 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <div key={c.id} className="contact-row" onClick={() => openContact(c.id)}
                 style={{ background: c.id === selected ? 'var(--surface-2)' : 'transparent' }}>
                 <div>
-                  <div className="contact-name">{c.name}</div>
-                  <div className="contact-phone">{c.phone}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <div className="contact-name">{c.name}</div>
+                    <span className="contact-status-dot-mobile" style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, background: c.status==='hot'?'var(--red)':c.status==='work'?'var(--accent)':c.status==='warm'?'var(--orange)':'#555' }} />
+                  </div>
+                  {c.phone && <div className="contact-phone">{c.phone}</div>}
+                  <div className="contact-mobile-info">
+                    {c.addr && <span>{c.addr}</span>}
+                    {c.lastContact && <span style={{ color: c.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)' }}>{c.daysSince === 0 ? 'сегодня' : `${c.daysSince} дн.`}</span>}
+                    {c.next && <span style={{ color:'var(--text-faint)' }}>{c.next}</span>}
+                  </div>
                 </div>
                 <div className="contact-col-hide">
                   <div className="contact-addr">{c.addr}</div>
@@ -291,9 +299,11 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </a>
               {/* Quick stats row */}
               <div className="contact-quick-stats">
-                <span className="contact-stat-chip" style={{ color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--green)' }}>
-                  📞 {cur.daysSince === 0 ? 'сегодня' : `${cur.daysSince} дн. назад`}
-                </span>
+                {cur.lastContact && (
+                  <span className="contact-stat-chip" style={{ color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--green)' }}>
+                    📞 {cur.daysSince === 0 ? 'сегодня' : `${cur.daysSince} дн. назад`}
+                  </span>
+                )}
                 {cur.nextWhen && (
                   <span className="contact-stat-chip" style={{ color:'var(--accent)' }}>
                     📅 {fmtDate(cur.nextWhen)}

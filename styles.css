@@ -1502,6 +1502,20 @@ button {
   background: var(--surface-2); border: 1px solid var(--border);
   color: var(--text-dim);
 }
+/* Contact list — compact mobile info row */
+.contact-mobile-info {
+  display: none;
+  gap: 6px; flex-wrap: nowrap; overflow: hidden;
+  margin-top: 3px; font-size: 10.5px; color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+.contact-mobile-info span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.contact-mobile-info span + span::before { content: '·'; margin-right: 4px; color: var(--border-strong); }
+.contact-status-dot-mobile { display: none; }
+@media (max-width: 640px) {
+  .contact-mobile-info { display: flex; }
+  .contact-status-dot-mobile { display: inline-block !important; }
+}
 .desc-link-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px; border-radius: 6px;

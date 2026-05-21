@@ -5,123 +5,132 @@ const TaskDragList = ({ tasks, onToggle, onDelete, onOpen, onReorder }) => {
   const [localTasks, setLocalTasks] = React.useState(tasks);
   const [draggingIdx, setDraggingIdx] = React.useState(null);
   const [dragOverIdx, setDragOverIdx] = React.useState(null);
-  const dragState = React.useRef({});
-  const touchState = React.useRef({});
+  // Refs so imperative handlers always see fresh values without stale closures
+  const S = React.useRef({ from: null, over: null, tasks });
+  const onReorderRef = React.useRef(onReorder);
   const listRef = React.useRef(null);
 
-  // Sync when parent tasks prop changes (e.g. after refresh)
-  React.useEffect(() => { setLocalTasks(tasks); }, [tasks]);
+  React.useEffect(() => { S.current.tasks = tasks; setLocalTasks(tasks); }, [tasks]);
+  React.useEffect(() => { onReorderRef.current = onReorder; }, [onReorder]);
 
   const _todayStr = new Date().toISOString().slice(0, 10);
-  const isDueToday = (due) => !!due && (due === _todayStr || due.toLowerCase().startsWith('сегодня'));
+  const isDueToday = (due) => !!due && (due === _todayStr || (typeof due === 'string' && due.toLowerCase().startsWith('сегодня')));
 
-  // ── HTML5 drag ─────────────────────────────────────────────────────────────
-  const handleDragStart = (idx) => {
-    dragState.current.from = idx;
+  // ── PC drag (HTML5 DataTransfer) ───────────────────────────────────────────
+  const pcDragStart = (e, idx) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+    S.current.from = idx;
     setDraggingIdx(idx);
   };
-  const handleDragOver = (e, idx) => {
+  const pcDragOver = (e, idx) => {
     e.preventDefault();
-    if (dragState.current.from !== idx) setDragOverIdx(idx);
+    e.dataTransfer.dropEffect = 'move';
+    if (S.current.from !== idx) { S.current.over = idx; setDragOverIdx(idx); }
   };
-  const handleDrop = (idx) => {
-    const from = dragState.current.from;
-    if (from == null || from === idx) { setDraggingIdx(null); setDragOverIdx(null); return; }
-    const next = [...localTasks];
+  const pcDrop = (e, idx) => {
+    e.preventDefault();
+    const from = S.current.from;
+    S.current.from = null; S.current.over = null;
+    setDraggingIdx(null); setDragOverIdx(null);
+    if (from == null || from === idx) return;
+    const next = [...S.current.tasks];
     const [item] = next.splice(from, 1);
     next.splice(idx, 0, item);
+    S.current.tasks = next;
     setLocalTasks(next);
-    setDraggingIdx(null);
-    setDragOverIdx(null);
-    dragState.current = {};
-    onReorder && onReorder(next);
+    onReorderRef.current && onReorderRef.current(next);
   };
-  const handleDragEnd = () => { setDraggingIdx(null); setDragOverIdx(null); dragState.current = {}; };
+  const pcDragEnd = () => { S.current.from = null; S.current.over = null; setDraggingIdx(null); setDragOverIdx(null); };
 
-  // ── Touch drag ─────────────────────────────────────────────────────────────
-  const handleTouchStart = (e, idx) => {
-    const t = e.touches[0];
-    touchState.current = { from: idx, startY: t.clientY, startX: t.clientX, moved: false };
-    setDraggingIdx(idx);
-  };
-  const handleTouchMove = (e) => {
-    if (touchState.current.from == null) return;
-    const t = e.touches[0];
-    const dy = Math.abs(t.clientY - touchState.current.startY);
-    const dx = Math.abs(t.clientX - touchState.current.startX);
-    if (dy < 6 && dx < 6) return;
-    touchState.current.moved = true;
-    e.preventDefault();
-    if (!listRef.current) return;
-    const items = listRef.current.querySelectorAll('[data-drag-idx]');
-    let over = null;
-    items.forEach(el => {
-      const r = el.getBoundingClientRect();
-      if (t.clientY >= r.top && t.clientY <= r.bottom) over = parseInt(el.dataset.dragIdx);
-    });
-    if (over !== null && over !== touchState.current.from) setDragOverIdx(over);
-  };
-  const handleTouchEnd = () => {
-    const { from, moved } = touchState.current;
-    if (moved && dragOverIdx !== null && from !== dragOverIdx) {
-      const next = [...localTasks];
-      const [item] = next.splice(from, 1);
-      next.splice(dragOverIdx, 0, item);
-      setLocalTasks(next);
-      onReorder && onReorder(next);
-    }
-    setDraggingIdx(null);
-    setDragOverIdx(null);
-    touchState.current = {};
-  };
+  // ── Touch drag — imperative non-passive listeners so preventDefault works ──
+  const touchRef = React.useRef({ from: null, startY: 0, moved: false });
+  React.useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const getIdx = (y) => {
+      for (const item of el.querySelectorAll('[data-drag-idx]')) {
+        const r = item.getBoundingClientRect();
+        if (y >= r.top && y <= r.bottom) return parseInt(item.dataset.dragIdx);
+      }
+      return null;
+    };
+    const onStart = (e) => {
+      if (!e.target.closest('.drag-handle')) return;
+      const item = e.target.closest('[data-drag-idx]');
+      if (!item) return;
+      const idx = parseInt(item.dataset.dragIdx);
+      touchRef.current = { from: idx, startY: e.touches[0].clientY, moved: false };
+      S.current.from = idx; S.current.over = null;
+      setDraggingIdx(idx);
+    };
+    const onMove = (e) => {
+      if (touchRef.current.from == null) return;
+      const dy = Math.abs(e.touches[0].clientY - touchRef.current.startY);
+      if (dy > 5) { touchRef.current.moved = true; e.preventDefault(); }
+      if (!touchRef.current.moved) return;
+      const over = getIdx(e.touches[0].clientY);
+      if (over !== null && over !== touchRef.current.from) { S.current.over = over; setDragOverIdx(over); }
+    };
+    const onEnd = () => {
+      const { from, moved } = touchRef.current;
+      const over = S.current.over;
+      touchRef.current = { from: null, startY: 0, moved: false };
+      S.current.from = null; S.current.over = null;
+      setDraggingIdx(null); setDragOverIdx(null);
+      if (moved && from != null && over != null && from !== over) {
+        const next = [...S.current.tasks];
+        const [item] = next.splice(from, 1);
+        next.splice(over, 0, item);
+        S.current.tasks = next;
+        setLocalTasks(next);
+        onReorderRef.current && onReorderRef.current(next);
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove',  onMove,  { passive: false });
+    el.addEventListener('touchend',   onEnd,   { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove',  onMove);
+      el.removeEventListener('touchend',   onEnd);
+    };
+  }, []);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  const today = localTasks.filter(t => !t.done && isDueToday(t.due));
-  const later = localTasks.filter(t => !t.done && !isDueToday(t.due));
-  const done  = localTasks.filter(t => t.done);
-
-  const renderItem = (t, idx) => (
-    <div key={t.id} data-drag-idx={idx}
-      draggable
-      onDragStart={() => handleDragStart(idx)}
-      onDragOver={e => handleDragOver(e, idx)}
-      onDrop={() => handleDrop(idx)}
-      onDragEnd={handleDragEnd}
-      onTouchStart={e => handleTouchStart(e, idx)}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      data-dragging={draggingIdx === idx ? '1' : '0'}
-      data-dragover={dragOverIdx === idx && draggingIdx !== idx ? '1' : '0'}
-      style={{ touchAction: 'none', transition: 'opacity 0.12s' }}>
-      <TaskRow task={t} onToggle={onToggle} onDelete={onDelete} onOpen={onOpen}
-        dragHandleProps={{ className: 'drag-handle' }} />
-    </div>
-  );
+  // ── Render — build sections while preserving flat indices ─────────────────
+  const sections = [];
+  let curG = null;
+  localTasks.forEach((t, idx) => {
+    const g = t.done ? 'done' : isDueToday(t.due) ? 'today' : 'later';
+    if (g !== curG) { sections.push({ g, items: [] }); curG = g; }
+    sections[sections.length - 1].items.push({ t, idx });
+  });
+  const LABELS = { today: 'Сегодня', later: 'Позже', done: 'Выполнено' };
+  const multiSection = sections.length > 1 || (sections[0] && sections[0].g !== 'later');
 
   return (
     <div ref={listRef}>
-      {today.length > 0 && (
-        <div>
-          <div className="section-label" style={{ fontSize:11, opacity:0.5, padding:'6px 0 2px' }}>Сегодня</div>
-          {today.map((t, i) => renderItem(t, localTasks.indexOf(t)))}
+      {sections.map(({ g, items }) => (
+        <div key={g}>
+          {multiSection && <div style={{ fontSize:10.5, opacity:0.4, padding:'6px 4px 2px', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em' }}>{LABELS[g]}</div>}
+          {items.map(({ t, idx }) => (
+            <div key={t.id} data-drag-idx={idx}
+              draggable
+              onDragStart={e => pcDragStart(e, idx)}
+              onDragOver={e => pcDragOver(e, idx)}
+              onDrop={e => pcDrop(e, idx)}
+              onDragEnd={pcDragEnd}
+              data-dragging={draggingIdx === idx ? '1' : '0'}
+              data-dragover={dragOverIdx === idx && draggingIdx !== idx ? '1' : '0'}
+              style={{ transition:'opacity 0.12s' }}>
+              <TaskRow task={t} onToggle={onToggle} onDelete={onDelete} onOpen={onOpen}
+                dragHandleProps={{ title:'Перетащить' }} />
+            </div>
+          ))}
         </div>
-      )}
-      {later.length > 0 && (
-        <div>
-          {today.length > 0 && <div className="section-label" style={{ fontSize:11, opacity:0.5, padding:'6px 0 2px' }}>Позже</div>}
-          {later.map((t) => renderItem(t, localTasks.indexOf(t)))}
-        </div>
-      )}
-      {done.length > 0 && (
-        <div>
-          <div className="section-label" style={{ fontSize:11, opacity:0.5, padding:'6px 0 2px' }}>Выполнено</div>
-          {done.map((t) => renderItem(t, localTasks.indexOf(t)))}
-        </div>
-      )}
+      ))}
       {localTasks.length === 0 && (
-        <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-dim)', fontSize:13 }}>
-          Нет задач
-        </div>
+        <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-dim)', fontSize:13 }}>Нет задач</div>
       )}
     </div>
   );
