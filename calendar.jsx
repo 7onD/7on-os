@@ -141,19 +141,96 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     await deleteEvent(id); await refresh();
   };
 
-  // Assign horizontal lanes to overlapping timed events
-  const layoutDayEvents = (events) => {
+  // Group overlapping events into stacks (connected-component approach)
+  const groupOverlappingEvents = (events) => {
     const sorted = [...events].sort((a, b) => a.start - b.start);
-    const laneEnds = [];
-    const result = [];
+    const groups = [];
     for (const ev of sorted) {
-      let lane = laneEnds.findIndex(end => end <= ev.start);
-      if (lane === -1) { lane = laneEnds.length; laneEnds.push(ev.end); }
-      else { laneEnds[lane] = ev.end; }
-      result.push({ ...ev, _lane: lane });
+      let placed = false;
+      for (const g of groups) {
+        const maxEnd = Math.max(...g.map(x => x.end));
+        const minStart = Math.min(...g.map(x => x.start));
+        if (ev.start < maxEnd && ev.end > minStart) { g.push(ev); placed = true; break; }
+      }
+      if (!placed) groups.push([ev]);
     }
-    const total = laneEnds.length || 1;
-    return result.map(ev => ({ ...ev, _totalLanes: total }));
+    return groups;
+  };
+
+  const [expandedStack, setExpandedStack] = React.useState(null);
+  React.useEffect(() => {
+    if (!expandedStack) return;
+    const close = () => setExpandedStack(null);
+    document.addEventListener('click', close, true);
+    return () => document.removeEventListener('click', close, true);
+  }, [expandedStack]);
+
+  const renderEventStack = (group, stackKey) => {
+    const minStart = Math.min(...group.map(e => e.start));
+    const maxEnd   = Math.max(...group.map(e => e.end));
+    const top    = (minStart - HOURS[0]) * cellH + 4;
+    const height = Math.max((maxEnd - minStart) * cellH - 8, 28);
+    const first  = group[0];
+    const color  = KIND_COLORS[first.kind] || '#888';
+    const isExpanded = expandedStack === stackKey;
+    const hasMany = group.length > 1;
+
+    return (
+      <div key={stackKey} style={{ position:'absolute', top, left:2, right:2, zIndex: isExpanded ? 20 : 2 }}>
+        {/* Shadow cards for depth effect */}
+        {hasMany && group.slice(1, 3).map((ev, si) => (
+          <div key={ev.id} style={{
+            position:'absolute', inset:0, borderRadius:6, pointerEvents:'none',
+            background:`${KIND_COLORS[ev.kind] || color}20`,
+            border:`1px solid ${KIND_COLORS[ev.kind] || color}40`,
+            transform:`translate(${(si+1)*3}px, ${(si+1)*3}px)`,
+            zIndex:-(si+1),
+          }} />
+        ))}
+
+        {/* Face card */}
+        <div className="fcal-event"
+          style={{ position:'relative', height, background:`${color}22`, borderLeftColor:color, color, cursor:'pointer', left:0, right:'auto', width:'100%', boxSizing:'border-box' }}
+          onClick={e => { e.stopPropagation(); hasMany ? setExpandedStack(isExpanded ? null : stackKey) : openDetail(e, first); }}>
+          <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', paddingRight: hasMany ? 22 : 14 }}>{first.title}</div>
+          <div className="when">{formatTime(first.start)} – {formatTime(first.end)}</div>
+          {hasMany && (
+            <div style={{ position:'absolute', top:4, right:18, background:color, color:'#111', borderRadius:8, fontSize:9, fontWeight:700, padding:'1px 5px', lineHeight:'14px', opacity:0.9 }}>
+              +{group.length - 1}
+            </div>
+          )}
+          <button onClick={e => { e.stopPropagation(); handleDeleteFromGrid(first.id); }}
+            style={{ position:'absolute', top:3, right:3, background:'none', border:'none', cursor:'pointer', color:'inherit', padding:'1px 3px', opacity:0.5, fontSize:13 }}>×</button>
+        </div>
+
+        {/* Expanded list */}
+        {isExpanded && (
+          <div style={{ position:'absolute', top:height + 4, left:0, right:0, minWidth:180, zIndex:40,
+            background:'var(--surface-2)', border:'1px solid var(--border-strong)', borderRadius:8,
+            boxShadow:'0 8px 32px rgba(0,0,0,0.55)', overflow:'hidden',
+            animation:'scaleIn 0.14s cubic-bezier(0.16,1,0.3,1)' }}
+            onClick={e => e.stopPropagation()}>
+            {group.map((ev, i) => {
+              const c = KIND_COLORS[ev.kind] || '#888';
+              return (
+                <div key={ev.id}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', cursor:'pointer',
+                    borderLeft:`3px solid ${c}`, background:`${c}12`,
+                    borderBottom: i < group.length - 1 ? '1px solid var(--border)' : 'none' }}
+                  onClick={e => { setExpandedStack(null); openDetail(e, ev); }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, fontWeight:500, color:c, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{ev.title}</div>
+                    <div style={{ fontSize:10.5, color:'var(--text-dim)', fontFamily:'var(--font-mono)', marginTop:2 }}>{formatTime(ev.start)} – {formatTime(ev.end)}</div>
+                  </div>
+                  <button onClick={e2 => { e2.stopPropagation(); setExpandedStack(null); handleDeleteFromGrid(ev.id); }}
+                    style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', fontSize:14, padding:'0 2px', flexShrink:0 }}>×</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleCreateTag = async () => {
@@ -233,14 +310,14 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <React.Fragment key={h}>
             <div className="fcal-hour">{String(h).padStart(2,'0')}:00</div>
             {DAYS.map((d, di) => {
-              const timedEvs = hi === 0
-                ? layoutDayEvents(D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start !== -1))
+              const groups = hi === 0
+                ? groupOverlappingEvents(D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start !== -1))
                 : [];
               return (
                 <div key={di} className="fcal-cell"
                   style={{ position:'relative', cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
                   onClick={() => openSlot(di, h)}>
-                  {timedEvs.map(e => renderEventBlock(e))}
+                  {groups.map((g, gi) => renderEventStack(g, `${di}-${gi}`))}
                 </div>
               );
             })}
@@ -330,7 +407,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const renderDayView = () => {
     const day = DAYS[viewDayIdx];
     const allDayEvs  = D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start === -1);
-    const timedEvs   = layoutDayEvents(D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start !== -1));
+    const timedGroups = groupOverlappingEvents(D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start !== -1));
     return (
       <div style={{ display:'grid', gridTemplateColumns:'60px 1fr', gap:0 }} className="cal-desktop">
         <div />
@@ -376,7 +453,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             <div className="fcal-cell"
               style={{ position:'relative', height:cellH, cursor:'pointer', zIndex: hi === 0 ? 5 : 1 }}
               onClick={() => openSlot(viewDayIdx, h)}>
-              {hi === 0 && timedEvs.map(e => renderEventBlock(e))}
+              {hi === 0 && timedGroups.map((g, gi) => renderEventStack(g, `dv-${gi}`))}
             </div>
           </React.Fragment>
         ))}
