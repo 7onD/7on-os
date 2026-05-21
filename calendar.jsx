@@ -12,6 +12,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
   const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
   const [mobileView, setMobileView]     = React.useState('week'); // 'week' | 'month'
+  const [monthSelDate, setMonthSelDate] = React.useState(todayIso); // selected date in mobile month view
   const [newTagName, setNewTagName]     = React.useState('');
   const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
   const [savingTag, setSavingTag]       = React.useState(false);
@@ -503,7 +504,8 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <button className="btn" onClick={() => setMonthOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
           <button className="btn ghost" onClick={() => setMonthOffset(0)} disabled={monthOffset === 0}>Текущий</button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:1, background:'var(--border)' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:1, background: opts.compact ? 'transparent' : 'var(--border)' }}
+          className={opts.compact ? 'cal-month-compact-grid' : ''}>
           {DOW_NAMES.map(d => (
             <div key={d} style={{ background:'var(--surface)', padding:'6px 0', textAlign:'center', fontFamily:'var(--font-mono)', fontSize:10.5, color:'var(--text-faint)', textTransform:'uppercase', letterSpacing:'0.06em' }}>{d}</div>
           ))}
@@ -512,18 +514,40 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             const cellDate = c.cur ? `${year}-${String(month+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}` : '';
             const evs = c.cur ? (evsByDate[cellDate] || []) : [];
             const isToday = c.cur && cellDate === todayIso;
-            const maxVisible = opts.compact ? 2 : 3;
+            const isSel = opts.compact && c.cur && cellDate === opts.selDate;
+
+            if (opts.compact) {
+              // ── Apple Calendar style: date circle + colored dots ──────────
+              return (
+                <div key={i} onClick={() => c.cur && opts.onDaySel && opts.onDaySel({ year, month, day: c.d, dow, iso: cellDate })}
+                  style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'4px 0 6px',
+                    cursor: c.cur ? 'pointer' : 'default', opacity: c.cur ? 1 : 0.25, minHeight:52, background: isSel ? 'var(--surface-2)' : 'transparent', borderRadius:8 }}>
+                  <div style={{
+                    width:28, height:28, borderRadius:'50%', display:'grid', placeItems:'center',
+                    fontFamily:'var(--font-mono)', fontSize:13, fontWeight: isToday || isSel ? 700 : 400,
+                    background: isToday ? 'var(--accent)' : isSel ? 'var(--surface-3)' : 'transparent',
+                    color: isToday ? '#0a0a0a' : 'var(--text)', marginBottom:4,
+                  }}>{c.d}</div>
+                  {/* Colored dots */}
+                  <div style={{ display:'flex', gap:3, flexWrap:'wrap', justifyContent:'center', minHeight:8 }}>
+                    {evs.slice(0, 3).map((e, ei) => (
+                      <div key={ei} style={{ width:6, height:6, borderRadius:'50%', background: KIND_COLORS[e.kind] || '#888', flexShrink:0 }} />
+                    ))}
+                    {evs.length > 3 && <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--text-faint)', flexShrink:0 }} />}
+                  </div>
+                </div>
+              );
+            }
+
+            // ── Desktop full cell ──────────────────────────────────────────
+            const maxVisible = 3;
             return (
               <div key={i} className="cal-month-cell"
                 style={{ opacity: c.cur ? 1 : 0.3 }}
                 onClick={() => {
                   if (!c.cur) return;
-                  if (opts.onDaySel) {
-                    opts.onDaySel({ year, month, day: c.d, dow });
-                  } else {
-                    setCalView('day');
-                    setViewDayIdx(dow < 7 ? dow : 0);
-                  }
+                  if (opts.onDaySel) opts.onDaySel({ year, month, day: c.d, dow, iso: cellDate });
+                  else { setCalView('day'); setViewDayIdx(dow < 7 ? dow : 0); }
                 }}>
                 <div className="month-date-num" style={{
                   width:22, height:22, borderRadius:'50%', display:'grid', placeItems:'center',
@@ -565,18 +589,83 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         </div>
 
         {mobileView === 'month' ? (
-          /* Month view on mobile — compact Apple-style, clicking a day jumps to week strip */
+          /* Month view on mobile — Apple-style: compact grid + day list below */
           <div>
             {renderMonthView({
               compact: true,
-              onDaySel: ({ year, month, day, dow }) => {
-                const clickDate = new Date(year, month, day);
-                const newOffset = Math.floor((clickDate.setHours(0,0,0,0) - BASE_MON.getTime()) / (7 * 24 * 60 * 60 * 1000));
-                setWeekOffset(newOffset);
-                setMobileDayIdx(dow);
-                setMobileView('week');
-              }
+              selDate: monthSelDate,
+              onDaySel: ({ iso }) => setMonthSelDate(iso),
             })}
+            {/* Day event list — updates when you tap a cell */}
+            {(() => {
+              const [sy, sm, sd] = monthSelDate.split('-').map(Number);
+              const selDateObj = new Date(sy, sm - 1, sd);
+              const selDow = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][selDateObj.getDay()];
+              const selDowRu = ['вс','пн','вт','ср','чт','пт','сб'][selDateObj.getDay()];
+              // Events for selected date
+              const dayEvs = D.EVENTS.filter(e => e.event_date === monthSelDate)
+                .sort((a, b) => (a.start === -1 ? -1 : b.start === -1 ? 1 : a.start - b.start));
+              // Tasks due on selected date
+              const dayTasks = [...(D.PERSONAL_TASKS || []), ...(D.WORK_TASKS || []), ...(D.STUDY_TASKS || [])]
+                .filter(t => t.due === monthSelDate && !t.done)
+                .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+              const MONTHS_FULL_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+              const isSelToday = monthSelDate === todayIso;
+              return (
+                <div style={{ marginTop:14, borderTop:'1px solid var(--border)', paddingTop:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                    <div style={{ fontFamily:'var(--font-mono)', fontSize:13, fontWeight:600, color:'var(--text)' }}>
+                      {selDow}, {sd} {MONTHS_FULL_RU[sm - 1]}
+                    </div>
+                    {isSelToday && <span className="tag" style={{ fontSize:10 }}>сегодня</span>}
+                  </div>
+                  {dayEvs.length === 0 && dayTasks.length === 0 ? (
+                    <div style={{ padding:'24px 0', textAlign:'center', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:12,
+                      border:'1.5px dashed var(--border)', borderRadius:14 }}>
+                      Нет событий
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {dayEvs.map(e => (
+                        <div key={e.id} style={{ display:'flex', gap:10, padding:'12px 14px', background:'var(--surface-2)',
+                          borderRadius:12, alignItems:'center', cursor:'pointer' }}
+                          onClick={ev => openDetail(ev, e)}>
+                          <div style={{ width:3, borderRadius:2, alignSelf:'stretch', background:KIND_COLORS[e.kind] || '#888', flexShrink:0 }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2 }}>{e.title}</div>
+                            <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
+                              {e.start === -1 ? 'весь день' : `${formatTime(e.start)} – ${formatTime(e.end)}`}
+                            </div>
+                          </div>
+                          <span style={{ fontSize:10.5, padding:'3px 8px', borderRadius:5, flexShrink:0,
+                            background:`${KIND_COLORS[e.kind] || '#888'}22`, color: KIND_COLORS[e.kind] || 'var(--text-faint)',
+                            fontFamily:'var(--font-mono)', fontWeight:500 }}>
+                            {KIND_LABELS[e.kind] || e.kind}
+                          </span>
+                        </div>
+                      ))}
+                      {dayTasks.map(t => (
+                        <div key={t.id} style={{ display:'flex', gap:10, padding:'12px 14px', background:'var(--surface-2)',
+                          borderRadius:12, alignItems:'center' }}>
+                          <div style={{ width:3, borderRadius:2, alignSelf:'stretch', background:'var(--accent)', flexShrink:0 }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2 }}>{t.title}</div>
+                            <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
+                              {t.time ? t.time : 'задача'}
+                              {t.priority === 'high' && <span style={{ color:'var(--red)', marginLeft:6 }}>● высокий</span>}
+                            </div>
+                          </div>
+                          <span style={{ fontSize:10.5, padding:'3px 8px', borderRadius:5, flexShrink:0,
+                            background:'rgba(212,255,77,0.08)', color:'var(--accent)', fontFamily:'var(--font-mono)', fontWeight:500 }}>
+                            задача
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : (
           /* Week strip view */
