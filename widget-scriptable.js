@@ -90,7 +90,7 @@ function addRow(parent, { barColor, time, title, overdue, highPriority }) {
   // Время (если есть)
   if (time) {
     const timeTxt = row.addText(time)
-    timeTxt.font = Font.monospacedDigitSystemFont(9.5)
+    timeTxt.font = Font.boldSystemFont(9)
     timeTxt.textColor = barColor || C.dim
     timeTxt.lineLimit = 1
   }
@@ -180,7 +180,7 @@ async function createWidget() {
 
   hdr.addSpacer(5)
   const dotTxt = hdr.addText("·")
-  dotTxt.font = Font.regularSystemFont(10)
+  dotTxt.font = Font.systemFont(10)
   dotTxt.textColor = C.faint
   hdr.addSpacer(5)
 
@@ -193,7 +193,7 @@ async function createWidget() {
   hdr.addSpacer()
 
   const clockTxt = hdr.addText(nowStr)
-  clockTxt.font = Font.monospacedDigitSystemFont(10)
+  clockTxt.font = Font.systemFont(10)
   clockTxt.textColor = C.faint
 
   w.addSpacer(10)
@@ -217,7 +217,7 @@ async function createWidget() {
 
     if (todayEvs.length > maxEv) {
       const moreEvs = w.addText(`  +${todayEvs.length - maxEv} ещё`)
-      moreEvs.font = Font.regularSystemFont(9)
+      moreEvs.font = Font.systemFont(9)
       moreEvs.textColor = C.faint
     }
 
@@ -249,7 +249,7 @@ async function createWidget() {
 
     if (allTasks.length > maxT) {
       const moreT = w.addText(`  +${allTasks.length - maxT} задач`)
-      moreT.font = Font.regularSystemFont(9)
+      moreT.font = Font.systemFont(9)
       moreT.textColor = C.faint
     }
   }
