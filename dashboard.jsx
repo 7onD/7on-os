@@ -7,6 +7,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
 
   const _todayD = new Date();
   const todayIso = `${_todayD.getFullYear()}-${String(_todayD.getMonth()+1).padStart(2,'0')}-${String(_todayD.getDate()).padStart(2,'0')}`;
+  // Задача в архиве — выполнена до сегодня (логика та же, что в tasks.jsx)
+  const isArchivedDash = (t) => t.done && (t.done_at ? t.done_at < todayIso : true);
   const [calDay, setCalDay] = React.useState(todayIso);
 
   // eventsByDate keyed by ISO date — works for ALL months, no hardcoding
@@ -60,9 +62,13 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     if (aOver !== bOver) return aOver ? -1 : 1;
     return (a.sort_order ?? 999) - (b.sort_order ?? 999);
   });
-  // Events for selected ISO date
+  // Events for selected ISO date — exclude auto-created task events (by task_id or title match)
+  const dayTaskTitles = new Set(dayTasks.map(t => (t.title || '').trim().toLowerCase()));
   const calDayEvents = D.EVENTS
-    .filter(e => e.event_date === calDay)
+    .filter(e => e.event_date === calDay &&
+      !e.task_id &&
+      !dayTaskTitles.has((e.title || '').trim().toLowerCase())
+    )
     .sort((a, b) => a.start - b.start);
 
   const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
@@ -107,7 +113,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Личные задачи <span className="count">{personalCount}</span></div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS).slice(0, 5)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
+          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isArchivedDash(t))).slice(0, 5)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
         </div>
 
         {/* Work tasks */}
@@ -119,7 +125,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             </div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.WORK_TASKS).slice(0, 5)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
+          <TaskDragList tasks={sortForDash(D.WORK_TASKS.filter(t => !isArchivedDash(t))).slice(0, 5)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
         </div>
 
         {/* Study tasks */}
@@ -131,7 +137,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             </div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.STUDY_TASKS || []).slice(0, 5)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
+          <TaskDragList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isArchivedDash(t))).slice(0, 5)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
         </div>
 
         {/* Mini calendar */}
