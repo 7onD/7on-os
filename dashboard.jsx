@@ -133,9 +133,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
         {/* Work tasks */}
         <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="card-header">
-            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="card-title">
               Рабочие задачи <span className="count">{workCount}</span>
-              <span className="tag work">Риэлтор</span>
             </div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
@@ -145,9 +144,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
         {/* Study tasks */}
         <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="card-header">
-            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="card-title">
               Учебные задачи <span className="count">{studyCount}</span>
-              <span className="tag" style={{ background:'rgba(122,167,255,0.12)', color:'var(--blue)', borderColor:'rgba(122,167,255,0.25)' }}>Учёба</span>
             </div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
@@ -196,6 +194,14 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           </div>
         </div>
 
+        {/* Global goals */}
+        <div className="card" style={{ gridColumn: 'span 8' }}>
+          <div className="card-header">
+            <div className="card-title">🎯 Глобальные цели</div>
+          </div>
+          <BigGoalsWidget goals={D.BIG_GOALS || []} refresh={refresh} />
+        </div>
+
         {/* Hot leads */}
         <div className="card" style={{ gridColumn: 'span 12' }}>
           <div className="card-header">
@@ -225,6 +231,140 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ── Big Goals Widget ──────────────────────────────────────────────────────────
+const BigGoalsWidget = ({ goals, refresh }) => {
+  const [expanded, setExpanded]       = React.useState({});
+  const [addingGoal, setAddingGoal]   = React.useState(false);
+  const [newTitle, setNewTitle]       = React.useState('');
+  const [editGoalId, setEditGoalId]   = React.useState(null);
+  const [newItemText, setNewItemText] = React.useState('');
+  const [saving, setSaving]           = React.useState(false);
+
+  const COLORS = ['var(--accent)', 'var(--blue)', 'var(--violet)', 'var(--orange)', '#5ee5a0', 'var(--red)'];
+
+  const isExpanded = (id) => expanded[id] !== false; // default: open
+
+  const handleAddGoal = async () => {
+    if (!newTitle.trim() || saving) return;
+    setSaving(true);
+    await createBigGoal({ title: newTitle.trim(), color: COLORS[goals.length % COLORS.length] });
+    setNewTitle(''); setAddingGoal(false);
+    await refresh(); setSaving(false);
+  };
+
+  const handleToggleItem = async (goal, itemId) => {
+    const items = (goal.items || []).map(it => it.id === itemId ? { ...it, done: !it.done } : it);
+    await updateBigGoal(goal.id, { items });
+    await refresh();
+  };
+
+  const handleAddItem = async (goal) => {
+    if (!newItemText.trim() || saving) return;
+    setSaving(true);
+    const items = [...(goal.items || []), { id: 'gi' + Date.now(), text: newItemText.trim(), done: false }];
+    await updateBigGoal(goal.id, { items });
+    setNewItemText(''); setEditGoalId(null);
+    await refresh(); setSaving(false);
+  };
+
+  const handleDeleteItem = async (goal, itemId) => {
+    const items = (goal.items || []).filter(it => it.id !== itemId);
+    await updateBigGoal(goal.id, { items });
+    await refresh();
+  };
+
+  const handleDeleteGoal = async (id) => {
+    await deleteBigGoal(id);
+    await refresh();
+  };
+
+  return (
+    <div>
+      {goals.length === 0 && !addingGoal && (
+        <div className="placeholder" style={{ marginBottom: 10 }}>Нет глобальных целей — добавьте первую</div>
+      )}
+
+      {goals.map((goal, gi) => {
+        const items = goal.items || [];
+        const doneCount = items.filter(i => i.done).length;
+        const open = isExpanded(goal.id);
+        const color = goal.color || COLORS[gi % COLORS.length];
+        return (
+          <div key={goal.id} style={{ marginBottom: 10, background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', borderLeft: `3px solid ${color}` }}
+              onClick={() => setExpanded(e => ({ ...e, [goal.id]: !open }))}>
+              <div style={{ flex: 1, fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{goal.title}</div>
+              {items.length > 0 && (
+                <span className="mono" style={{ fontSize: 10.5, color: doneCount === items.length ? color : 'var(--text-faint)' }}>
+                  {doneCount}/{items.length}
+                </span>
+              )}
+              <span style={{ fontSize: 11, color: 'var(--text-faint)', userSelect: 'none' }}>{open ? '▾' : '▸'}</span>
+              <button onClick={e => { e.stopPropagation(); handleDeleteGoal(goal.id); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 16, lineHeight: 1, padding: '0 0 0 4px', opacity: 0.5 }}>×</button>
+            </div>
+
+            {/* Items */}
+            {open && (
+              <div style={{ padding: '2px 14px 10px 17px' }}>
+                {items.map((item, ii) => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0',
+                    borderBottom: ii < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                    <input type="checkbox" checked={!!item.done} onChange={() => handleToggleItem(goal, item.id)}
+                      style={{ width: 14, height: 14, accentColor: color, flexShrink: 0, cursor: 'pointer' }} />
+                    <span style={{ fontSize: 12.5, flex: 1, textDecoration: item.done ? 'line-through' : 'none',
+                      color: item.done ? 'var(--text-faint)' : 'var(--text)' }}>{item.text}</span>
+                    <button onClick={() => handleDeleteItem(goal, item.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 13, lineHeight: 1, padding: '0 2px', opacity: 0 }}
+                      className="del-item-btn">×</button>
+                  </div>
+                ))}
+
+                {editGoalId === goal.id ? (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <input className="form-input" autoFocus placeholder="Новый подпункт…"
+                      value={newItemText} onChange={e => setNewItemText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddItem(goal); if (e.key === 'Escape') { setEditGoalId(null); setNewItemText(''); } }}
+                      style={{ flex: 1, fontSize: 12, padding: '4px 8px' }} />
+                    <button className="btn primary" style={{ padding: '4px 12px', fontSize: 12 }}
+                      onClick={() => handleAddItem(goal)} disabled={saving || !newItemText.trim()}>+</button>
+                    <button className="btn ghost" style={{ padding: '4px 8px', fontSize: 12 }}
+                      onClick={() => { setEditGoalId(null); setNewItemText(''); }}>✕</button>
+                  </div>
+                ) : (
+                  <button style={{ marginTop: items.length ? 8 : 2, background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-faint)', fontSize: 11.5, padding: '2px 0', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setEditGoalId(goal.id)}>
+                    <Icon name="plus" size={10} /> подпункт
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Add goal */}
+      {addingGoal ? (
+        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <input className="form-input" autoFocus placeholder="Название цели…"
+            value={newTitle} onChange={e => setNewTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddGoal(); if (e.key === 'Escape') { setAddingGoal(false); setNewTitle(''); } }}
+            style={{ flex: 1, fontSize: 12.5 }} />
+          <button className="btn primary" onClick={handleAddGoal} disabled={saving || !newTitle.trim()}>Добавить</button>
+          <button className="btn ghost" onClick={() => { setAddingGoal(false); setNewTitle(''); }}>Отмена</button>
+        </div>
+      ) : (
+        <button className="btn ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 12, marginTop: goals.length ? 4 : 0 }}
+          onClick={() => setAddingGoal(true)}>
+          <Icon name="plus" size={11} /> Новая цель
+        </button>
+      )}
     </div>
   );
 };

@@ -20,7 +20,7 @@ const apiDel   = (t, id)    => apiFetch(`table=${t}&id=${id}`, { method: 'DELETE
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadAllData() {
-  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files, folders, cal_tags] =
+  const [tasks, contacts, deals, fin_income, fin_expenses, goals, monthly, events, notes, files, folders, cal_tags, big_goals] =
     await Promise.all([
       apiGet('tasks'), apiGet('contacts'), apiGet('deals'),
       apiGet('fin_income'), apiGet('fin_expenses'), apiGet('goals'),
@@ -29,6 +29,7 @@ async function loadAllData() {
       apiGet('files').catch(() => []),
       apiGet('folders').catch(() => []),
       apiGet('cal_tags').catch(() => []),
+      apiGet('big_goals').catch(() => []),
     ]);
 
   // Default folders (shown when API returns empty)
@@ -66,6 +67,7 @@ async function loadAllData() {
       ? folders.filter(f => !f.id.startsWith('nf-'))
       : DEFAULT_FILE_FOLDERS,
     CAL_TAGS: cal_tags,
+    BIG_GOALS: big_goals,
     STATUS_LABEL,
   };
 }
@@ -120,6 +122,16 @@ async function createGoal({ name, target, current }) {
   await apiPost('goals', { name, target, current: cur, pct: Math.min(100, Math.round((cur / target) * 100)) });
 }
 async function deleteGoal(id) { await apiDel('goals', id); }
+
+// ── BIG GOALS (long-term) ─────────────────────────────────────────────────────
+const BIG_GOAL_COLORS = ['var(--accent)', 'var(--blue)', 'var(--violet)', 'var(--orange)', '#5ee5a0', 'var(--red)'];
+async function createBigGoal({ title, color, items }) {
+  const id = 'bg' + Date.now();
+  await apiPost('big_goals', { id, title, color: color || 'var(--accent)', items: items || [] });
+  return id;
+}
+async function updateBigGoal(id, fields) { await apiPatch('big_goals', id, fields); }
+async function deleteBigGoal(id) { await apiDel('big_goals', id); }
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
 async function createEvent({ day, start, end, title, kind, description, reminder, event_date, task_id }) {

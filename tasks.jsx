@@ -222,8 +222,6 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="card-header">
         <div className="card-title" style={{ display:'flex', alignItems:'center', gap:8 }}>
           {title} <span className="count">{tasks.length}</span>
-          {type === 'work' && <span className="tag work">Риэлтор</span>}
-          {type === 'study' && <span className="tag" style={{ background:'rgba(122,167,255,0.12)', color:'var(--blue)' }}>Учёба</span>}
         </div>
         <button className="btn ghost" style={{ padding:'4px 8px' }} onClick={() => { set('type', type); setShowAdd(true); }}>
           <Icon name="plus" size={13} /> Задача
