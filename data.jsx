@@ -72,7 +72,10 @@ async function loadAllData() {
 
 // ── TASKS ────────────────────────────────────────────────────────────────────
 async function toggleTask(id, done) {
-  await apiPatch('tasks', id, { done: done ? 1 : 0 });
+  const patch = { done: done ? 1 : 0 };
+  if (done) patch.done_at = new Date().toISOString().slice(0, 10);
+  else patch.done_at = '';
+  await apiPatch('tasks', id, patch);
 }
 async function createTask({ title, due, time, priority, type, tag, description, reminder, deadline }) {
   const id = (type === 'personal' ? 'p' : type === 'work' ? 'w' : 'e') + Date.now();

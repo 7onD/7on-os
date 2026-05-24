@@ -79,6 +79,7 @@ const MAIN_KB = {
   keyboard: [
     ['📋 Задачи', '📅 Сегодня'],
     ['👥 Контакты', '📝 Заметка'],
+    ['📆 Событие в календарь'],
   ],
   resize_keyboard: true,
   persistent: true,
@@ -332,13 +333,82 @@ async function runReminderCheck(storToken, { debug = false, force = false } = {}
   return { ok: true, sent: msgs.length, ...(debugInfo || {}) };
 }
 
+// ── Morning brief at 09:00 Moscow ─────────────────────────────────────────────
+async function runMorningBrief(storToken) {
+  const ownerId = process.env.TG_OWNER_ID;
+  if (!ownerId) return;
+
+  // Moscow time = UTC + 3h
+  const mosNow = new Date(new Date().getTime() + 3 * 3600 * 1000);
+  const h = mosNow.getUTCHours(), min = mosNow.getUTCMinutes();
+  if (h !== 9 || min > 5) return; // only fire at 09:00–09:05 Moscow
+
+  const y = mosNow.getUTCFullYear();
+  const mo = String(mosNow.getUTCMonth() + 1).padStart(2, '0');
+  const d  = String(mosNow.getUTCDate()).padStart(2, '0');
+  const todayStr = `${y}-${mo}-${d}`;
+
+  const notified = await getNotified(storToken);
+  const briefKey = `morning_brief_${todayStr}`;
+  if (notified[briefKey]) return; // already sent today
+
+  const [tasks, events] = await Promise.all([
+    getTable(storToken, 'tasks'),
+    getTable(storToken, 'events'),
+  ]);
+
+  const todayTasks   = tasks.filter(t => !t.done && (t.due === todayStr || (t.due || '').toLowerCase().startsWith('сегодня')));
+  const overdueTasks = tasks.filter(t => !t.done && t.due && t.due < todayStr && !/сегодня|завтра/.test((t.due || '').toLowerCase()));
+  const todayEvents  = events.filter(e => e.event_date === todayStr)
+    .sort((a, b) => (a.start_time ?? 99) - (b.start_time ?? 99));
+
+  const MONTHS_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const DOW_RU = ['вс','пн','вт','ср','чт','пт','сб'];
+  const dateObj = new Date(y, parseInt(mo)-1, parseInt(d));
+  const dayLabel = `${DOW_RU[dateObj.getDay()]}, ${parseInt(d)} ${MONTHS_SHORT[parseInt(mo)-1]}`;
+
+  const lines = [`☀️ <b>Доброе утро! ${dayLabel}</b>`];
+
+  if (todayEvents.length) {
+    lines.push('\n🗓 <b>События:</b>');
+    todayEvents.forEach(e => {
+      const st = e.start_time;
+      const hh = st === -1 ? 'весь день'
+        : `${String(Math.floor(st)).padStart(2,'0')}:${String(Math.round((st%1)*60)).padStart(2,'0')}`;
+      lines.push(`  ${hh} — ${e.title}`);
+    });
+  }
+
+  if (todayTasks.length) {
+    lines.push('\n✅ <b>Задачи на сегодня:</b>');
+    todayTasks.forEach(t => lines.push(`  • ${t.title}${t.time ? ' · ' + t.time : ''}`));
+  }
+
+  if (overdueTasks.length) {
+    lines.push(`\n⚡ <b>Просроченные (${overdueTasks.length}):</b>`);
+    overdueTasks.slice(0, 5).forEach(t => lines.push(`  ⚠ ${t.title} · ${t.due}`));
+    if (overdueTasks.length > 5) lines.push(`  ...и ещё ${overdueTasks.length - 5}`);
+  }
+
+  if (!todayEvents.length && !todayTasks.length && !overdueTasks.length) {
+    lines.push('\nСвободный день 🎉');
+  }
+
+  await tgSend(ownerId, lines.join('\n'));
+  notified[briefKey] = Date.now();
+  await saveNotified(storToken, notified);
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 module.exports.handler = async (event) => {
-  // Yandex Cloud Timer Trigger — runs reminder check on schedule
+  // Yandex Cloud Timer Trigger — runs reminder check + morning brief on schedule
   if (event.messages && Array.isArray(event.messages)) {
     try {
       const storToken = await getToken();
-      const result = await runReminderCheck(storToken);
+      const [result] = await Promise.all([
+        runReminderCheck(storToken),
+        runMorningBrief(storToken),
+      ]);
       return { statusCode: 200, body: JSON.stringify(result) };
     } catch (e) {
       return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
@@ -497,6 +567,73 @@ module.exports.handler = async (event) => {
           return reply({ ok: true });
         }
 
+        // Waiting for event title
+        if (waiting === 'event_title') {
+          allState[chatId] = { waiting: 'event_date', event_title: text };
+          await saveBotState(storToken, allState);
+          await tgSend(chatId,
+            `📅 Дата для "<b>${text}</b>":\nВведи дату (<code>2026-05-25</code>, <code>сегодня</code>, <code>завтра</code>, <code>25.05</code>)\n\n<i>/cancel — отмена</i>`,
+            { reply_markup: MAIN_KB });
+          return reply({ ok: true });
+        }
+
+        // Waiting for event date
+        if (waiting === 'event_date') {
+          const { event_title } = userState;
+          const mosNow = new Date(new Date().getTime() + 3 * 3600 * 1000);
+          let dateStr = text.toLowerCase().trim();
+          const mkIso = (dt) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+          if (dateStr === 'сегодня' || dateStr === 'today') dateStr = mkIso(mosNow);
+          else if (dateStr === 'завтра' || dateStr === 'tomorrow') dateStr = mkIso(new Date(mosNow.getTime() + 86400000));
+          else {
+            const dot = dateStr.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$/);
+            if (dot) dateStr = `${dot[3] || mosNow.getUTCFullYear()}-${dot[2].padStart(2,'0')}-${dot[1].padStart(2,'0')}`;
+          }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            await tgSend(chatId, '⚠️ Не понял дату. Напиши: <code>2026-05-25</code>, <code>25.05</code>, <code>сегодня</code> или <code>завтра</code>');
+            return reply({ ok: true });
+          }
+          allState[chatId] = { waiting: 'event_time', event_title, event_date: dateStr };
+          await saveBotState(storToken, allState);
+          await tgSend(chatId,
+            `⏰ Время начала для <b>${event_title}</b> (${dateStr}):\nНапиши <code>10:00</code> или <code>весь день</code>\n\n<i>/cancel — отмена</i>`,
+            { reply_markup: MAIN_KB });
+          return reply({ ok: true });
+        }
+
+        // Waiting for event time
+        if (waiting === 'event_time') {
+          const { event_title, event_date } = userState;
+          const timeText = text.toLowerCase().trim();
+          let startFloat = -1, endFloat = -1;
+          if (timeText !== 'весь день' && timeText !== 'allday') {
+            const tm = timeText.match(/^(\d{1,2}):(\d{2})/);
+            if (!tm) {
+              await tgSend(chatId, '⚠️ Не понял время. Напиши <code>10:00</code> или <code>весь день</code>');
+              return reply({ ok: true });
+            }
+            startFloat = parseInt(tm[1]) + parseInt(tm[2]) / 60;
+            endFloat = Math.min(startFloat + 1, 20);
+          }
+          const evList = await getTable(storToken, 'events');
+          const d = new Date(event_date + 'T00:00:00');
+          const dow = d.getDay();
+          evList.push({
+            id: 'ev' + Date.now(), start_time: startFloat, end_time: endFloat,
+            title: event_title, kind: 'personal', description: '📱 Из Telegram',
+            reminder: -1, event_date, day: dow === 0 ? 7 : dow,
+          });
+          await saveTable(storToken, 'events', evList);
+          delete allState[chatId];
+          await saveBotState(storToken, allState);
+          const timeLabel = startFloat === -1 ? 'весь день'
+            : `${String(Math.floor(startFloat)).padStart(2,'0')}:${String(Math.round((startFloat%1)*60)).padStart(2,'0')}`;
+          await tgSend(chatId,
+            `✅ Событие добавлено в календарь:\n<b>${event_title}</b>\n📅 ${event_date} · ${timeLabel}`,
+            { reply_markup: MAIN_KB });
+          return reply({ ok: true });
+        }
+
         // Waiting for note text
         if (waiting === 'note') {
           const notes = await getTable(storToken, 'notes');
@@ -592,6 +729,16 @@ module.exports.handler = async (event) => {
         return reply({ ok: true });
       }
 
+      // 📆 Событие в календарь
+      if (text === '📆 Событие в календарь' || /^\/event\b/i.test(text)) {
+        allState[chatId] = { waiting: 'event_title' };
+        await saveBotState(storToken, allState);
+        await tgSend(chatId,
+          '📆 Введи название события:\n\n<i>/cancel — отмена</i>',
+          { reply_markup: MAIN_KB });
+        return reply({ ok: true });
+      }
+
       // 📝 Заметка
       if (text === '📝 Заметка' || /^\/note\b/i.test(text)) {
         allState[chatId] = { waiting: 'note' };
@@ -618,7 +765,9 @@ module.exports.handler = async (event) => {
           '📋 <b>Задачи</b> — создать или посмотреть задачи\n' +
           '📅 <b>Сегодня</b> — события и задачи на сегодня\n' +
           '👥 <b>Контакты</b> — контакты и горячие лиды\n' +
-          '📝 <b>Заметка</b> — сохранить заметку\n\n' +
+          '📝 <b>Заметка</b> — сохранить заметку\n' +
+          '📆 <b>Событие в календарь</b> — добавить событие на дату/время\n\n' +
+          'Ежедневно в 9:00 приходит утренний бриф с задачами и событиями.\n\n' +
           '/cancel — отменить текущий ввод\n' +
           '/id — твой chat_id',
           { reply_markup: MAIN_KB });

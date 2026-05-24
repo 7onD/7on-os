@@ -5,7 +5,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [filter, setFilter] = React.useState('all');
   const [sort, setSort]     = React.useState('date');
   const [showAdd, setShowAdd] = React.useState(false);
-  const [form, setForm] = React.useState({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1', deadline: '' });
+  const [form, setForm] = React.useState({ title: '', due: '', time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1', deadline: '' });
   const [saving, setSaving] = React.useState(false);
   const [detailTask, setDetailTask] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
@@ -13,15 +13,24 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const _todayStr = new Date().toISOString().slice(0, 10);
-  const isDueToday = (due) => !!due && (due === _todayStr || due.toLowerCase().startsWith('сегодня'));
+  const _archiveCutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0,10); })();
+  const isArchived = (t) => t.done && t.done_at && t.done_at < _archiveCutoff;
+
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {
     const copy = [...list];
     if (sort === 'priority') return copy.sort((a, b) => (PRIO_ORDER[a.priority] ?? 1) - (PRIO_ORDER[b.priority] ?? 1));
     if (sort === 'alpha')    return copy.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
-    // 'date': done tasks at bottom, then by sort_order (manual), then by due string
+    // 'date': done at bottom; among open: today first, then overdue, then by sort_order/due
     return copy.sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
+      if (a.done) return 0;
+      const aToday = !!a.due && a.due === _todayStr;
+      const bToday = !!b.due && b.due === _todayStr;
+      if (aToday !== bToday) return aToday ? -1 : 1;
+      const aOver = !!a.due && a.due < _todayStr;
+      const bOver = !!b.due && b.due < _todayStr;
+      if (aOver !== bOver) return aOver ? -1 : 1;
       if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
       if (a.sort_order != null) return -1;
       if (b.sort_order != null) return 1;
@@ -33,10 +42,13 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const filterTasks = (list) => {
-    let res = list;
-    if (filter === 'open') res = res.filter(t => !t.done);
-    else if (filter === 'done') res = res.filter(t => t.done);
-    else if (filter === 'high') res = res.filter(t => t.priority === 'high');
+    let res = filter === 'archive'
+      ? list.filter(isArchived)
+      : list.filter(t => !isArchived(t));
+    if (filter === 'open' || filter === 'all') res = res.filter(t => !t.done);
+    else if (filter === 'done')    res = res.filter(t => t.done);
+    else if (filter === 'high')    res = res.filter(t => t.priority === 'high' && !t.done);
+    else if (filter === 'archive') { /* already filtered */ }
     return sortTasks(res);
   };
 
@@ -60,11 +72,21 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      const effectiveTag = form.tag.trim() || TYPE_TAG_DEFAULT[form.type] || 'Личное';
+      const effectiveTag = TYPE_TAG_DEFAULT[form.type] || 'Личное';
       await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder), deadline: form.deadline || null });
+      // Auto-add to calendar if due date is set
+      if (form.due) {
+        const kindMap = { personal: 'personal', work: 'work', study: 'personal' };
+        let startF = -1, endF = -1;
+        if (form.time) {
+          const [h, m] = form.time.split(':').map(Number);
+          startF = h + m / 60; endF = Math.min(startF + 1, 20);
+        }
+        await createEvent({ day: 1, start: startF, end: endF, title: form.title.trim(), kind: kindMap[form.type] || 'personal', description: '', reminder: -1, event_date: form.due });
+      }
       await refresh();
       setShowAdd(false);
-      setForm({ title: '', due: new Date().toISOString().slice(0,10), time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1', deadline: '' });
+      setForm({ title: '', due: '', time: '', priority: 'med', type: 'personal', tag: 'Личное', description: '', reminder: '-1', deadline: '' });
     } finally { setSaving(false); }
   };
 
@@ -87,7 +109,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     if (!detailTask) return;
     setDetailSaving(true);
     try {
-      const effectiveTag = (detailForm.tag || '').trim() || TYPE_TAG_DEFAULT[detailTask.type] || 'Личное';
+      const effectiveTag = TYPE_TAG_DEFAULT[detailTask.type] || 'Личное';
       await updateTask(detailTask.id, {
         title: detailForm.title,
         due: detailForm.due,
@@ -99,6 +121,16 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         reminder: parseInt(detailForm.reminder),
         deadline: detailForm.deadline || null,
       });
+      // Auto-add to calendar if due date was just added (was empty before)
+      if (detailForm.due && !detailTask.due) {
+        const kindMap = { personal: 'personal', work: 'work', study: 'personal' };
+        let startF = -1, endF = -1;
+        if (detailForm.time) {
+          const [h, m] = detailForm.time.split(':').map(Number);
+          startF = h + m / 60; endF = Math.min(startF + 1, 20);
+        }
+        await createEvent({ day: 1, start: startF, end: endF, title: detailForm.title, kind: kindMap[detailTask.type] || 'personal', description: '', reminder: -1, event_date: detailForm.due });
+      }
       await refresh();
       setDetailTask(null);
     } finally { setDetailSaving(false); }
@@ -165,8 +197,18 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               onKeyDown={e => e.key === 'Enter' && handleAdd()} autoFocus />
           </Field>
           <div className="form-row" style={{ gridTemplateColumns:'1fr 1fr' }}>
-            <Field label="Срок"><FInput type="date" value={form.due} onChange={e => set('due', e.target.value)} /></Field>
-            <Field label="Время"><FInput type="time" value={form.time} onChange={e => set('time', e.target.value)} /></Field>
+            <Field label="Срок">
+              <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                <FInput type="date" value={form.due} onChange={e => set('due', e.target.value)} style={{ flex:1, minWidth:0 }} />
+                {form.due && <button type="button" className="icon-btn" style={{ flexShrink:0, width:26, height:26 }} onClick={() => set('due','')}>×</button>}
+              </div>
+            </Field>
+            <Field label="Время">
+              <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                <FInput type="time" value={form.time} onChange={e => set('time', e.target.value)} style={{ flex:1, minWidth:0 }} />
+                {form.time && <button type="button" className="icon-btn" style={{ flexShrink:0, width:26, height:26 }} onClick={() => set('time','')}>×</button>}
+              </div>
+            </Field>
           </div>
           <Field label="Крайний срок (дедлайн)">
             <div style={{ display:'flex', gap:6, alignItems:'center' }}>
@@ -224,12 +266,18 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
             <div className="task-detail-body">
               <div className="task-detail-meta">
-                <div className="task-detail-row">
+                <div className="task-detail-row task-detail-row-datetime">
                   <span className="stat-label" style={{ minWidth:80 }}>Срок</span>
-                  <FInput type="date" value={detailForm.due || ''} onChange={e => setD('due', e.target.value)}
-                    style={{ fontSize:13, flex:1 }} />
-                  <FInput type="time" value={detailForm.time || ''} onChange={e => setD('time', e.target.value)}
-                    style={{ fontSize:13, width:110, marginLeft:8 }} />
+                  <div style={{ display:'flex', gap:6, alignItems:'center', flex:1, minWidth:0 }}>
+                    <FInput type="date" value={detailForm.due || ''} onChange={e => setD('due', e.target.value)}
+                      style={{ fontSize:13, flex:1, minWidth:0 }} />
+                    {detailForm.due && <button type="button" className="icon-btn" style={{ width:24, height:24, flexShrink:0 }} onClick={() => setD('due','')}>×</button>}
+                  </div>
+                  <div style={{ display:'flex', gap:6, alignItems:'center', marginLeft:8 }}>
+                    <FInput type="time" value={detailForm.time || ''} onChange={e => setD('time', e.target.value)}
+                      style={{ fontSize:13, width:100 }} />
+                    {detailForm.time && <button type="button" className="icon-btn" style={{ width:24, height:24, flexShrink:0 }} onClick={() => setD('time','')}>×</button>}
+                  </div>
                 </div>
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80, color:'var(--red)', opacity: detailForm.deadline ? 1 : 0.5 }}>Дедлайн</span>
@@ -290,7 +338,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="page-header">
         <div>
           <h2>Задачи</h2>
-          <div className="subtitle">{allTasks.filter(t => !t.done).length} открытых · {allTasks.filter(t => t.done).length} выполнено</div>
+          <div className="subtitle">{allTasks.filter(t => !t.done && !isArchived(t)).length} открытых · {allTasks.filter(t => t.done && !isArchived(t)).length} выполнено</div>
         </div>
         <div className="actions">
           <button className="btn primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Задача</button>
@@ -298,9 +346,10 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       </div>
 
       <div className="filters">
-        {[['all','Все',allTasks.length],['open','Открытые',allTasks.filter(t=>!t.done).length],
-          ['high','Приоритет',allTasks.filter(t=>t.priority==='high').length],
-          ['done','Выполнено',allTasks.filter(t=>t.done).length]].map(([id,label,num]) => (
+        {[['all','Открытые',allTasks.filter(t=>!t.done&&!isArchived(t)).length],
+          ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length],
+          ['done','Выполнено',allTasks.filter(t=>t.done&&!isArchived(t)).length],
+          ['archive','Архив',allTasks.filter(isArchived).length]].map(([id,label,num]) => (
           <button key={id} className="filter" data-on={filter===id?'1':'0'} onClick={() => setFilter(id)}>
             {label} <span className="num">{num}</span>
           </button>

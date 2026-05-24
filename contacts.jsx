@@ -86,14 +86,30 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       const [h, m] = scheduleForm.time.split(':').map(Number);
       const startFloat = h + m / 60;
       const endFloat = Math.min(startFloat + 1, 19);
-      await createEvent({
-        day: dayNum, start: startFloat, end: endFloat,
-        title: `Контакт: ${cur.name}`, kind: 'contact',
-        description: scheduleForm.description,
-        reminder: parseInt(scheduleForm.reminder),
-        event_date: scheduleForm.date,
-      });
-      await updateContact(cur.id, { next_when: scheduleForm.date });
+      const taskTitle = cur.next
+        ? `${cur.name} — ${cur.next}`
+        : `Контакт: ${cur.name}`;
+      await Promise.all([
+        createEvent({
+          day: dayNum, start: startFloat, end: endFloat,
+          title: `Контакт: ${cur.name}`, kind: 'contact',
+          description: scheduleForm.description,
+          reminder: parseInt(scheduleForm.reminder),
+          event_date: scheduleForm.date,
+        }),
+        createTask({
+          title: taskTitle,
+          due: scheduleForm.date,
+          time: scheduleForm.time,
+          priority: 'high',
+          type: 'work',
+          tag: 'Риэлтор',
+          description: scheduleForm.description || '',
+          reminder: parseInt(scheduleForm.reminder),
+          deadline: null,
+        }),
+        updateContact(cur.id, { next_when: scheduleForm.date }),
+      ]);
       await refresh();
       setShowSchedule(false);
       setScheduleForm({ date: '', time: '10:00', reminder: '0', description: '' });
@@ -300,19 +316,14 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </a>
               {/* Quick stats row */}
               <div className="contact-quick-stats">
-                {cur.lastContact && (
-                  <span className="contact-stat-chip" style={{ color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--green)' }}>
-                    📞 {cur.daysSince === 0 ? 'сегодня' : `${cur.daysSince} дн. назад`}
-                  </span>
-                )}
                 {cur.nextWhen && (
                   <span className="contact-stat-chip" style={{ color:'var(--accent)' }}>
                     📅 {fmtDate(cur.nextWhen)}
                   </span>
                 )}
                 {cur.lastContact && (
-                  <span className="contact-stat-chip">
-                    посл. {fmtDate(cur.lastContact)}
+                  <span className="contact-stat-chip" style={{ color: cur.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)' }}>
+                    посл. {fmtDate(cur.lastContact)}{cur.daysSince > 0 ? ` · ${cur.daysSince} дн. назад` : ''}
                   </span>
                 )}
               </div>

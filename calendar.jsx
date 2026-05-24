@@ -6,11 +6,15 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [detailEvent, setDetailEvent] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
-  const [weekOffset, setWeekOffset] = React.useState(0);
+  const [weekOffset, setWeekOffset] = React.useState(() => {
+    const base = new Date(2026, 4, 18);
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.floor((today.getTime() - base.getTime()) / (7*24*60*60*1000));
+  });
   const [calView, setCalView]       = React.useState('week'); // 'week' | 'day' | 'month'
-  const [viewDayIdx, setViewDayIdx] = React.useState(0);    // 0-6 for day view
+  const [viewDayIdx, setViewDayIdx] = React.useState(() => (new Date().getDay() + 6) % 7); // 0=Mon
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
-  const [mobileDayIdx, setMobileDayIdx] = React.useState(0); // selected day index for mobile cal
+  const [mobileDayIdx, setMobileDayIdx] = React.useState(() => (new Date().getDay() + 6) % 7); // today
   const [monthSelDate, setMonthSelDate] = React.useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; });
   const [newTagName, setNewTagName]     = React.useState('');
   const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
@@ -866,7 +870,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <button className="btn" onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
               <div className="mono cal-date-label" style={{ fontSize:14, fontWeight:500, whiteSpace:'nowrap' }}>{weekLabel}</div>
               <button className="btn" onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
-              <button className="btn ghost" onClick={() => setWeekOffset(todayWeekOffset)} disabled={weekOffset === todayWeekOffset}>Сегодня</button>
+              <button className="btn ghost" onClick={() => { setWeekOffset(todayWeekOffset); setCalView('day'); setViewDayIdx((new Date().getDay()+6)%7); }}>Сегодня</button>
             </>
           ) : (
             <div style={{ width:4 }} />

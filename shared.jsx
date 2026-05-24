@@ -70,11 +70,23 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen, dragHandleProps }) => {
   const [busy, setBusy] = useState(false);
 
   const _todayStr = new Date().toISOString().slice(0, 10);
+  const _nowTime  = new Date().toTimeString().slice(0, 5); // "HH:MM"
+
+  // Due-date status: overdue or today
+  const dueStatus = (() => {
+    if (!task.due || task.done) return null;
+    if (task.due < _todayStr) return 'overdue';
+    if (task.due === _todayStr) {
+      if (!task.time) return 'today';
+      return task.time <= _nowTime ? 'overdue' : 'today';
+    }
+    return null;
+  })();
+
   const deadlineStatus = (() => {
     if (!task.deadline) return null;
     if (task.deadline < _todayStr) return 'overdue';
     if (task.deadline === _todayStr) return 'today';
-    // within 2 days
     const d = new Date(task.deadline + 'T00:00:00');
     const diff = (d - new Date()) / 86400000;
     if (diff <= 2) return 'warn';
@@ -96,7 +108,10 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen, dragHandleProps }) => {
   };
 
   return (
-    <div className="task" data-done={task.done ? '1' : '0'} data-has-deadline={task.deadline ? '1' : '0'}
+    <div className="task"
+      data-done={task.done ? '1' : '0'}
+      data-has-deadline={task.deadline ? '1' : '0'}
+      data-due-status={dueStatus || ''}
       onClick={() => onOpen && onOpen(task)} style={{ cursor: onOpen ? 'pointer' : 'default' }}>
       {dragHandleProps && (
         <div className="drag-handle" {...dragHandleProps} onClick={e => e.stopPropagation()}>
@@ -110,12 +125,15 @@ const TaskRow = ({ task, onToggle, onDelete, onOpen, dragHandleProps }) => {
       <div className={`task-priority ${task.priority}`} />
       <div className="task-check" onClick={handleToggle} style={{ cursor: 'pointer', opacity: busy ? 0.5 : 1 }} />
       <div className="task-body">
-        <div className="task-title" style={deadlineStatus === 'overdue' || deadlineStatus === 'today' ? { color:'var(--red)' } : undefined}>
+        <div className="task-title"
+          style={(dueStatus === 'overdue' || deadlineStatus === 'overdue' || deadlineStatus === 'today') ? { color:'var(--red)' } : undefined}>
           {task.title}
         </div>
         <div className="task-meta">
-          <span>{fmtDate(task.due)}{task.time && <span className="mono" style={{ marginLeft:4, opacity:0.7 }}>{task.time}</span>}</span>
-          {task.tag && <><span className="dot" /><span className="tag work" style={{ textTransform: 'none', padding: '0 6px' }}>{task.tag}</span></>}
+          <span style={dueStatus === 'overdue' ? { color:'var(--red)' } : dueStatus === 'today' ? { color:'var(--accent)' } : undefined}>
+            {fmtDate(task.due)}{task.time && <span className="mono" style={{ marginLeft:4, opacity:0.7 }}>{task.time}</span>}
+            {dueStatus === 'overdue' && !task.done && <span style={{ marginLeft:4 }}>⚡</span>}
+          </span>
           {task.description && <><span className="dot" /><span style={{ color: 'var(--text-faint)', fontSize: 10.5 }}>заметка</span></>}
           {task.deadline && !task.done && (deadlineStatus === 'overdue' || deadlineStatus === 'today' || deadlineStatus === 'warn') && (
             <><span className="dot" />

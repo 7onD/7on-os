@@ -1071,6 +1071,19 @@ button {
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     max-height: 88vh;
   }
+
+  /* Date+time row in detail panel — stack vertically on mobile */
+  .task-detail-row-datetime {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .task-detail-row-datetime > div:last-child {
+    margin-left: 0 !important;
+  }
+  .task-detail-row-datetime .form-input[type="time"] {
+    width: auto !important;
+    flex: 1;
+  }
 }
 
 /* ═══ TASK / EVENT DETAIL PANEL ════════════════════════════════════════════ */
@@ -1450,6 +1463,22 @@ button {
 }
 .task[data-has-deadline="1"] .task-title {
   /* subtle red tint when deadline is near */
+}
+
+/* ── Overdue / Today task highlighting ─────────────────────────────────────── */
+.task[data-due-status="overdue"] {
+  border-color: rgba(255,107,122,0.25);
+  background: rgba(255,107,122,0.06);
+}
+.task[data-due-status="overdue"]:hover {
+  background: rgba(255,107,122,0.1);
+}
+.task[data-due-status="today"] {
+  border-color: rgba(212,255,77,0.2);
+  background: rgba(212,255,77,0.04);
+}
+.task[data-due-status="today"]:hover {
+  background: rgba(212,255,77,0.08);
 }
 
 /* ═══ TASK DETAIL TITLE (textarea, wraps long text) ═════════════════════════ */
