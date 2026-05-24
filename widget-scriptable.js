@@ -1,267 +1,256 @@
 // ╔══════════════════════════════════════════════════════╗
 // ║         7on OS — Today Widget for Scriptable         ║
-// ║         Medium size · Events + Tasks today           ║
+// ║         Medium size · Two columns: Events | Tasks    ║
 // ╚══════════════════════════════════════════════════════╝
-//
-// Установка:
-// 1. Скачать Scriptable из App Store (бесплатно)
-// 2. Скопировать этот файл целиком в новый скрипт
-// 3. Добавить виджет Scriptable среднего размера на экран
-// 4. Выбрать этот скрипт в настройках виджета
 
 const API = "https://functions.yandexcloud.net/d4eck1v8o203hh4lr9ov"
 
-// ─── Цвета (повторяют тему дашборда) ─────────────────────────────────────────
+// ─── Цвета ────────────────────────────────────────────────────────────────────
 const C = {
-  bg:      new Color("#0f0f11"),
-  surface: new Color("#17171a"),
-  text:    new Color("#ededf0"),
-  dim:     new Color("#8a8a93"),
-  faint:   new Color("#56565d"),
-  accent:  new Color("#d4ff4d"),   // жёлто-зелёный акцент
-  red:     new Color("#ff6b7a"),   // просрочено / высокий приоритет
-  orange:  new Color("#ffb45e"),   // средний приоритет
-  blue:    new Color("#7aa7ff"),   // личное
-  violet:  new Color("#b78cff"),   // сделки
-  green:   new Color("#5ee5a0"),   // контакты
+  bg:     new Color("#0f0f11"),
+  text:   new Color("#ededf0"),
+  dim:    new Color("#8a8a93"),
+  faint:  new Color("#56565d"),
+  accent: new Color("#d4ff4d"),
+  red:    new Color("#ff6b7a"),
+  orange: new Color("#ffb45e"),
+  blue:   new Color("#7aa7ff"),
+  violet: new Color("#b78cff"),
+  green:  new Color("#5ee5a0"),
 }
-
-// Цвета типов события (как в календаре)
-const KIND_COLOR = {
-  deal:     C.violet,
-  work:     C.accent,
-  personal: C.blue,
-  meeting:  C.orange,
-  contact:  C.green,
+const KIND_CLR = {
+  deal: C.violet, work: C.accent, personal: C.blue,
+  meeting: C.orange, contact: C.green,
 }
+const PRIO_CLR = { high: C.red, med: C.orange, low: C.faint }
 
-// Цвета приоритетов задач
-const PRIO_COLOR = {
-  high: C.red,
-  med:  C.orange,
-  low:  C.faint,
-}
-
-// ─── Вспомогательные функции ──────────────────────────────────────────────────
+// ─── Утилиты ─────────────────────────────────────────────────────────────────
 const MONTHS = ["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"]
 const DOWS   = ["вс","пн","вт","ср","чт","пт","сб"]
 
-function pad(n) { return String(n).padStart(2, "0") }
-
+function pad(n) { return String(n).padStart(2,"0") }
 function todayIso() {
   const d = new Date()
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
 }
-
-// Форматирует float-время (10.5 → "10:30")
 function fmtTime(t) {
   if (t == null || t === -1) return null
-  const h = Math.floor(t)
-  const m = Math.round((t % 1) * 60)
-  return `${pad(h)}:${pad(m)}`
+  return `${pad(Math.floor(t))}:${pad(Math.round((t%1)*60))}`
 }
-
-// Безопасный GET к API
-async function fetchTable(table) {
+async function fetchTable(t) {
   try {
-    const req = new Request(`${API}?table=${table}`)
-    req.timeoutInterval = 10
-    return await req.loadJSON()
-  } catch (e) {
-    return []
-  }
+    const r = new Request(`${API}?table=${t}`)
+    r.timeoutInterval = 10
+    return await r.loadJSON()
+  } catch { return [] }
 }
 
-// ─── Рендер одной строки (событие / задача) ───────────────────────────────────
-//   [ ║ ] [12:00] Название задачи или события      [⚡]
-function addRow(parent, { barColor, time, title, overdue, highPriority }) {
-  const row = parent.addStack()
+// ─── Рендер строки ────────────────────────────────────────────────────────────
+// [ ║ ] [10:00] Название...  [⚡]
+function addRow(col, { barColor, time, title, overdue }) {
+  const row = col.addStack()
   row.layoutHorizontally()
   row.centerAlignContent()
-  row.spacing = 6
-  row.setPadding(2, 0, 2, 0)
+  row.spacing = 5
 
-  // Цветная полоска слева (как на сайте)
+  // Цветная полоска
   const bar = row.addStack()
   bar.backgroundColor = barColor || C.faint
   bar.cornerRadius = 2
-  bar.size = new Size(3, 16)
+  bar.size = new Size(2, 14)
 
-  // Время (если есть)
+  // Время
   if (time) {
-    const timeTxt = row.addText(time)
-    timeTxt.font = Font.boldSystemFont(9)
-    timeTxt.textColor = barColor || C.dim
-    timeTxt.lineLimit = 1
+    const t = row.addText(time)
+    t.font = Font.boldSystemFont(8.5)
+    t.textColor = barColor || C.dim
+    t.lineLimit = 1
   }
 
-  // Название
-  const titleColor = overdue
-    ? C.red
-    : highPriority
-      ? new Color("#ffd0a0")   // тёплый тинт для высокого приоритета
-      : C.text
+  // Название (обрезается)
+  const txt = row.addText(title)
+  txt.font = Font.systemFont(10.5)
+  txt.textColor = overdue ? C.red : C.text
+  txt.lineLimit = 1
+  txt.minimumScaleFactor = 0.75
 
-  const titleTxt = row.addText(title)
-  titleTxt.font = Font.systemFont(11)
-  titleTxt.textColor = titleColor
-  titleTxt.lineLimit = 1
-  titleTxt.minimumScaleFactor = 0.75
-
-  // Бейдж просрочки
+  // ⚡ просрочено
   if (overdue) {
-    row.addSpacer()
-    const badge = row.addText("⚡")
-    badge.font = Font.systemFont(9.5)
+    const b = row.addText("⚡")
+    b.font = Font.systemFont(9)
+    b.lineLimit = 1
   }
 }
 
-// Маленький заголовок секции
-function addSectionLabel(parent, text) {
-  const lbl = parent.addText(text)
-  lbl.font = Font.boldSystemFont(8)
-  lbl.textColor = C.faint
+function addColLabel(col, text) {
+  const l = col.addText(text)
+  l.font = Font.boldSystemFont(8)
+  l.textColor = C.faint
 }
 
-// ─── Основная функция ─────────────────────────────────────────────────────────
+// ─── Виджет ───────────────────────────────────────────────────────────────────
 async function createWidget() {
   const today = todayIso()
   const now   = new Date()
   const nowStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`
 
-  // Параллельная загрузка данных
   const [tasks, events] = await Promise.all([
     fetchTable("tasks"),
     fetchTable("events"),
   ])
 
-  // Сегодняшние события (по дате), отсортированные по времени начала
-  const todayEvs = events
-    .filter(e => e.event_date === today)
-    .sort((a, b) => (a.start_time ?? 99) - (b.start_time ?? 99))
-
-  // Просроченные задачи (не выполненные, дата < сегодня, ISO-формат)
+  // Просроченные задачи
   const overdueTasks = tasks
     .filter(t => !t.done && t.due && t.due < today && /^\d{4}-\d{2}-\d{2}$/.test(t.due))
-    .map(t => ({ ...t, _ov: true }))
-    .sort((a, b) => a.due.localeCompare(b.due))
+    .map(t => ({...t, _ov: true}))
+    .sort((a,b) => a.due.localeCompare(b.due))
 
-  // Задачи на сегодня (не выполненные)
+  // Задачи на сегодня
   const todayTasks = tasks
     .filter(t => !t.done && t.due === today)
-    .map(t => ({ ...t, _ov: false }))
-    .sort((a, b) => {
-      const po = { high: 0, med: 1, low: 2 }
-      return (po[a.priority] ?? 1) - (po[b.priority] ?? 1)
-    })
+    .map(t => ({...t, _ov: false}))
+    .sort((a,b) => ({high:0,med:1,low:2}[a.priority]??1) - ({high:0,med:1,low:2}[b.priority]??1))
 
-  // Объединяем: сначала просроченные, потом сегодняшние
   const allTasks = [...overdueTasks, ...todayTasks]
 
-  // Лимиты строк (чтобы влезло в medium widget)
-  const hasEvents = todayEvs.length > 0
-  const hasTasks  = allTasks.length > 0
-  const maxEv = hasEvents ? (hasTasks ? 2 : 4) : 0
-  const maxT  = hasTasks  ? (hasEvents ? 3 : 5) : 0
+  // Названия задач — чтобы не дублировать события, созданные из задач
+  const taskTitles = new Set(allTasks.map(t => (t.title||"").trim().toLowerCase()))
 
-  // ══ Собираем виджет ════════════════════════════════════════════════════════
+  // События сегодня — без тех, что совпадают с задачами
+  const todayEvs = events
+    .filter(e =>
+      e.event_date === today &&
+      !taskTitles.has((e.title||"").trim().toLowerCase())
+    )
+    .sort((a,b) => (a.start_time??99)-(b.start_time??99))
+
+  const MAX = 4  // максимум строк в каждом столбце
+
+  // ══ Виджет ═══════════════════════════════════════════════════════════════════
   const w = new ListWidget()
   w.backgroundColor = C.bg
-  w.setPadding(14, 15, 12, 15)
+  w.setPadding(12, 14, 10, 14)
 
-  // ── Заголовок ──────────────────────────────────────────────────────────────
+  // ── Шапка ────────────────────────────────────────────────────────────────────
   const hdr = w.addStack()
   hdr.layoutHorizontally()
   hdr.centerAlignContent()
 
-  const logoTxt = hdr.addText("7on")
-  logoTxt.font = Font.boldSystemFont(11)
-  logoTxt.textColor = C.accent
+  const logo = hdr.addText("7on")
+  logo.font = Font.boldSystemFont(11)
+  logo.textColor = C.accent
 
-  hdr.addSpacer(5)
-  const dotTxt = hdr.addText("·")
-  dotTxt.font = Font.systemFont(10)
-  dotTxt.textColor = C.faint
-  hdr.addSpacer(5)
+  hdr.addSpacer(4)
+  const dot = hdr.addText("·")
+  dot.font = Font.systemFont(10)
+  dot.textColor = C.faint
+  hdr.addSpacer(4)
 
-  const dateTxt = hdr.addText(
-    `${DOWS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`
-  )
+  const dateTxt = hdr.addText(`${DOWS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`)
   dateTxt.font = Font.mediumSystemFont(11)
   dateTxt.textColor = C.dim
 
   hdr.addSpacer()
 
-  const clockTxt = hdr.addText(nowStr)
-  clockTxt.font = Font.systemFont(10)
-  clockTxt.textColor = C.faint
+  const clock = hdr.addText(nowStr)
+  clock.font = Font.systemFont(10)
+  clock.textColor = C.faint
 
-  w.addSpacer(10)
+  w.addSpacer(9)
 
-  // ── Секция: События ────────────────────────────────────────────────────────
-  if (todayEvs.length > 0) {
-    addSectionLabel(w, "СОБЫТИЯ")
-    w.addSpacer(5)
+  // ── Пустое состояние ─────────────────────────────────────────────────────────
+  if (todayEvs.length === 0 && allTasks.length === 0) {
+    w.addSpacer()
+    const e = w.addText("Свободный день 🎉")
+    e.font = Font.mediumSystemFont(13)
+    e.textColor = C.dim
+    e.centerAlignText()
+    w.addSpacer()
+    return w
+  }
 
-    todayEvs.slice(0, maxEv).forEach(e => {
-      const color = KIND_COLOR[e.kind] || C.blue
-      addRow(w, {
-        barColor: color,
+  // ── Два столбца ───────────────────────────────────────────────────────────────
+  const row = w.addStack()
+  row.layoutHorizontally()
+  row.topAlignContent()
+  row.spacing = 0
+
+  // ── Левый столбец: СОБЫТИЯ ────────────────────────────────────────────────────
+  const left = row.addStack()
+  left.layoutVertically()
+  left.topAlignContent()
+  left.spacing = 0
+
+  // Заголовок
+  const evLabel = todayEvs.length > 0
+    ? `СОБЫТИЯ  ${todayEvs.length}`
+    : "СОБЫТИЯ"
+  addColLabel(left, evLabel)
+  left.addSpacer(5)
+
+  if (todayEvs.length === 0) {
+    const none = left.addText("  —")
+    none.font = Font.systemFont(10)
+    none.textColor = C.faint
+  } else {
+    todayEvs.slice(0, MAX).forEach(e => {
+      addRow(left, {
+        barColor: KIND_CLR[e.kind] || C.blue,
         time: fmtTime(e.start_time),
-        title: e.title || "(без названия)",
+        title: e.title || "",
         overdue: false,
-        highPriority: false,
       })
-      w.addSpacer(3)
+      left.addSpacer(4)
     })
-
-    if (todayEvs.length > maxEv) {
-      const moreEvs = w.addText(`  +${todayEvs.length - maxEv} ещё`)
-      moreEvs.font = Font.systemFont(9)
-      moreEvs.textColor = C.faint
-    }
-
-    // Разделитель между секциями
-    if (hasTasks) {
-      w.addSpacer(7)
+    if (todayEvs.length > MAX) {
+      const more = left.addText(`  +${todayEvs.length - MAX}...`)
+      more.font = Font.systemFont(9)
+      more.textColor = C.faint
     }
   }
 
-  // ── Секция: Задачи ─────────────────────────────────────────────────────────
-  if (allTasks.length > 0) {
-    // Формируем заголовок секции с подсчётом
-    const parts = []
-    if (overdueTasks.length) parts.push(`${overdueTasks.length} просроч.`)
-    if (todayTasks.length)   parts.push(`${todayTasks.length} сегодня`)
-    addSectionLabel(w, `ЗАДАЧИ  ${parts.join("  ·  ").toUpperCase()}`)
-    w.addSpacer(5)
+  // Разделитель
+  row.addSpacer(10)
+  const sep = row.addStack()
+  sep.backgroundColor = new Color("#ffffff", 0.07)
+  sep.size = new Size(1, 110)
+  row.addSpacer(10)
 
-    allTasks.slice(0, maxT).forEach(t => {
-      addRow(w, {
-        barColor: t._ov ? C.red : (PRIO_COLOR[t.priority] || C.faint),
+  // ── Правый столбец: ЗАДАЧИ ────────────────────────────────────────────────────
+  const right = row.addStack()
+  right.layoutVertically()
+  right.topAlignContent()
+  right.spacing = 0
+
+  // Заголовок с подсчётом
+  const parts = []
+  if (overdueTasks.length) parts.push(`${overdueTasks.length}⚡`)
+  if (todayTasks.length)   parts.push(`${todayTasks.length} сег`)
+  const tLabel = allTasks.length > 0
+    ? `ЗАДАЧИ  ${parts.join("  ")}`
+    : "ЗАДАЧИ"
+  addColLabel(right, tLabel)
+  right.addSpacer(5)
+
+  if (allTasks.length === 0) {
+    const none = right.addText("  —")
+    none.font = Font.systemFont(10)
+    none.textColor = C.faint
+  } else {
+    allTasks.slice(0, MAX).forEach(t => {
+      addRow(right, {
+        barColor: t._ov ? C.red : (PRIO_CLR[t.priority] || C.faint),
         time: t.time || null,
-        title: t.title || "(без названия)",
+        title: t.title || "",
         overdue: t._ov,
-        highPriority: !t._ov && t.priority === "high",
       })
-      w.addSpacer(3)
+      right.addSpacer(4)
     })
-
-    if (allTasks.length > maxT) {
-      const moreT = w.addText(`  +${allTasks.length - maxT} задач`)
-      moreT.font = Font.systemFont(9)
-      moreT.textColor = C.faint
+    if (allTasks.length > MAX) {
+      const more = right.addText(`  +${allTasks.length - MAX}...`)
+      more.font = Font.systemFont(9)
+      more.textColor = C.faint
     }
-  }
-
-  // ── Пустое состояние ───────────────────────────────────────────────────────
-  if (!hasEvents && !hasTasks) {
-    w.addSpacer()
-    const emptyTxt = w.addText("Свободный день 🎉")
-    emptyTxt.font = Font.mediumSystemFont(14)
-    emptyTxt.textColor = C.dim
-    emptyTxt.centerAlignText()
-    w.addSpacer()
   }
 
   return w
@@ -273,7 +262,6 @@ const widget = await createWidget()
 if (config.runsInWidget) {
   Script.setWidget(widget)
 } else {
-  // Предпросмотр в самом приложении Scriptable
   await widget.presentMedium()
 }
 
