@@ -42,10 +42,10 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const filterTasks = (list) => {
-    // Always exclude tasks that have passed their day (hidden forever)
+    // Exclude tasks done before today (gone forever)
     let res = list.filter(t => !isArchived(t));
-    if (filter === 'open' || filter === 'all') res = res.filter(t => !t.done);
-    else if (filter === 'done') res = res.filter(t => t.done);
+    // "all" / "open" shows both open tasks AND tasks done today (they stay until midnight)
+    if (filter === 'open' || filter === 'all') { /* show everything not archived */ }
     else if (filter === 'high') res = res.filter(t => t.priority === 'high' && !t.done);
     return sortTasks(res);
   };
@@ -383,7 +383,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="page-header">
         <div>
           <h2>Задачи</h2>
-          <div className="subtitle">{allTasks.filter(t => !t.done && !isArchived(t)).length} открытых · {allTasks.filter(t => t.done && !isArchived(t)).length} выполнено сегодня</div>
+          <div className="subtitle">{allTasks.filter(t => !t.done && !isArchived(t)).length} открытых · {allTasks.filter(t => t.done && !isArchived(t)).length} выполнено</div>
         </div>
         <div className="actions">
           <button className="btn primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Задача</button>
@@ -391,9 +391,8 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       </div>
 
       <div className="filters">
-        {[['all','Открытые',allTasks.filter(t=>!t.done&&!isArchived(t)).length],
-          ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length],
-          ['done','Выполненные',allTasks.filter(t=>t.done&&!isArchived(t)).length]].map(([id,label,num]) => (
+        {[['all','Открытые',allTasks.filter(t=>!isArchived(t)).length],
+          ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length]].map(([id,label,num]) => (
           <button key={id} className="filter" data-on={filter===id?'1':'0'} onClick={() => setFilter(id)}>
             {label} <span className="num">{num}</span>
           </button>
