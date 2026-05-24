@@ -7,8 +7,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
 
   const _todayD = new Date();
   const todayIso = `${_todayD.getFullYear()}-${String(_todayD.getMonth()+1).padStart(2,'0')}-${String(_todayD.getDate()).padStart(2,'0')}`;
-  // Задача в архиве — выполнена до сегодня (логика та же, что в tasks.jsx)
-  const isArchivedDash = (t) => t.done && (t.done_at ? t.done_at < todayIso : true);
+  // Any done task is immediately hidden (same logic as tasks.jsx)
+  const isArchivedDash = (t) => !!t.done;
   const [calDay, setCalDay] = React.useState(todayIso);
 
   // eventsByDate keyed by ISO date — works for ALL months, no hardcoding
@@ -71,7 +71,20 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     )
     .sort((a, b) => a.start - b.start);
 
-  const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
+  const handleToggle = async (id, done) => {
+    await toggleTask(id, done);
+    if (done) {
+      const task = allTasks.find(t => t.id === id);
+      if (task) {
+        const linkedEv = D.EVENTS.find(e =>
+          e.task_id === id ||
+          (!e.task_id && (e.title||'').trim() === (task.title||'').trim() && (e.event_date||'') === (task.due||''))
+        );
+        if (linkedEv) await deleteEvent(linkedEv.id);
+      }
+    }
+    await refresh();
+  };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
   const handleOpen = (task) => { if (window.SEVEN_NAV) window.SEVEN_NAV('tasks', { kind: 'task', id: task.id }); };
 

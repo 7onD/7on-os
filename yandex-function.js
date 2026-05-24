@@ -359,7 +359,10 @@ async function runMorningBrief(storToken) {
 
   const todayTasks   = tasks.filter(t => !t.done && (t.due === todayStr || (t.due || '').toLowerCase().startsWith('сегодня')));
   const overdueTasks = tasks.filter(t => !t.done && t.due && t.due < todayStr && !/сегодня|завтра/.test((t.due || '').toLowerCase()));
-  const todayEvents  = events.filter(e => e.event_date === todayStr)
+  // Exclude task-linked events (task_id set or title matches a today/overdue task)
+  const allTodayTaskTitles = new Set([...todayTasks, ...overdueTasks].map(t => (t.title || '').trim().toLowerCase()));
+  const todayEvents  = events
+    .filter(e => e.event_date === todayStr && !e.task_id && !allTodayTaskTitles.has((e.title || '').trim().toLowerCase()))
     .sort((a, b) => (a.start_time ?? 99) - (b.start_time ?? 99));
 
   const MONTHS_SHORT = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
@@ -381,12 +384,24 @@ async function runMorningBrief(storToken) {
 
   if (todayTasks.length) {
     lines.push('\n✅ <b>Задачи на сегодня:</b>');
-    todayTasks.forEach(t => lines.push(`  • ${t.title}${t.time ? ' · ' + t.time : ''}`));
+    todayTasks.forEach(t => {
+      const meta = [];
+      if (t.time) meta.push(t.time);
+      if (t.priority === 'high') meta.push('🔴 высокий');
+      if (t.deadline) meta.push(`⚑ дл ${t.deadline}`);
+      const typeIcon = t.type === 'work' ? '💼' : t.type === 'study' ? '📚' : '🏠';
+      lines.push(`  ${typeIcon} ${t.title}${meta.length ? ' · ' + meta.join(' · ') : ''}`);
+    });
   }
 
   if (overdueTasks.length) {
     lines.push(`\n⚡ <b>Просроченные (${overdueTasks.length}):</b>`);
-    overdueTasks.slice(0, 5).forEach(t => lines.push(`  ⚠ ${t.title} · ${t.due}`));
+    overdueTasks.slice(0, 5).forEach(t => {
+      const meta = [`📅 ${t.due}`];
+      if (t.priority === 'high') meta.push('🔴');
+      if (t.deadline) meta.push(`⚑ дл ${t.deadline}`);
+      lines.push(`  ⚠ ${t.title} · ${meta.join(' ')}`);
+    });
     if (overdueTasks.length > 5) lines.push(`  ...и ещё ${overdueTasks.length - 5}`);
   }
 
@@ -508,10 +523,19 @@ module.exports.handler = async (event) => {
           const work     = open.filter(t => t.type === 'work');
           const personal = open.filter(t => t.type === 'personal');
           const study    = open.filter(t => t.type === 'study');
+          const todayStr = todayIso();
+          const fmtTask = (t) => {
+            const meta = [];
+            if (t.due) { if (t.due < todayStr) meta.push(`⚡${t.due}`); else if (t.due === todayStr) meta.push('📅 сегодня'); else meta.push(`📅 ${t.due}`); }
+            if (t.time) meta.push(`⏰ ${t.time}`);
+            if (t.priority === 'high') meta.push('🔴');
+            if (t.deadline) meta.push(`⚑ ${t.deadline}`);
+            return `  • ${t.title}${meta.length ? '  <i>' + meta.join(' ') + '</i>' : ''}`;
+          };
           const lines    = [`📋 Открытых задач: <b>${open.length}</b>`];
-          if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,8).forEach(t => lines.push(`  • ${t.title}`)); }
-          if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,8).forEach(t => lines.push(`  • ${t.title}`)); }
-          if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,8).forEach(t => lines.push(`  • ${t.title}`)); }
+          if (work.length)     { lines.push(''); lines.push(`💼 Рабочие (${work.length}):`);    work.slice(0,8).forEach(t => lines.push(fmtTask(t))); }
+          if (personal.length) { lines.push(''); lines.push(`🏠 Личные (${personal.length}):`); personal.slice(0,8).forEach(t => lines.push(fmtTask(t))); }
+          if (study.length)    { lines.push(''); lines.push(`📚 Учёба (${study.length}):`);     study.slice(0,8).forEach(t => lines.push(fmtTask(t))); }
           await tgEdit(chatId, messageId, lines.join('\n'));
           return reply({ ok: true });
         }
@@ -683,23 +707,46 @@ module.exports.handler = async (event) => {
           getTable(storToken, 'events'),
           getTable(storToken, 'tasks'),
         ]);
-        const todayEvs  = events
-          .filter(e => e.event_date === iso)
-          .sort((a, b) => (a.start_time ?? 99) - (b.start_time ?? 99));
+        // Tasks: due today OR deadline today (deadline-only gets separate note)
         const todayTask = tasks.filter(t =>
-          !t.done && (t.due === iso || (t.due || '').toLowerCase().includes('сегодня')));
+          !t.done && (
+            t.due === iso ||
+            (t.due || '').toLowerCase().includes('сегодня') ||
+            (t.deadline === iso && t.due !== iso)
+          )
+        );
+        // Events: exclude task-linked ones (by task_id or title match)
+        const taskTitlesSet = new Set(todayTask.map(t => (t.title || '').trim().toLowerCase()));
+        const todayEvs = events
+          .filter(e =>
+            e.event_date === iso &&
+            !e.task_id &&
+            !taskTitlesSet.has((e.title || '').trim().toLowerCase())
+          )
+          .sort((a, b) => (a.start_time ?? 99) - (b.start_time ?? 99));
+
+        const typeIcon = t => t.type === 'work' ? '💼' : t.type === 'study' ? '📚' : '🏠';
+        const pText    = p => p === 'high' ? ' 🔴' : p === 'low' ? ' ⬇️' : '';
+
         const lines = [`📅 <b>Сегодня, ${iso}</b>`];
         if (todayEvs.length) {
           lines.push('\n🗓 <b>События:</b>');
           todayEvs.forEach(e => {
             const hh = e.start_time === -1 ? 'весь день'
-              : `${String(Math.floor(e.start_time)).padStart(2,'0')}:00`;
+              : `${String(Math.floor(e.start_time)).padStart(2,'0')}:${String(Math.round((e.start_time%1)*60)).padStart(2,'0')}`;
             lines.push(`  ${hh} — ${e.title}`);
           });
         }
         if (todayTask.length) {
           lines.push('\n✅ <b>Задачи на сегодня:</b>');
-          todayTask.forEach(t => lines.push(`  • ${t.title}`));
+          todayTask.forEach(t => {
+            const meta = [];
+            if (t.time) meta.push(`⏰ ${t.time}`);
+            if (t.due < iso) meta.push(`⚡ просрочено (${t.due})`);
+            if (t.deadline === iso) meta.push('⚑ дедлайн сегодня');
+            else if (t.deadline) meta.push(`⚑ дл ${t.deadline}`);
+            lines.push(`  ${typeIcon(t)}${pText(t.priority)} <b>${t.title}</b>${meta.length ? '\n      ' + meta.join(' · ') : ''}`);
+          });
         }
         if (!todayEvs.length && !todayTask.length) lines.push('\nНет событий и задач 🎉');
         await tgSend(chatId, lines.join('\n'), { reply_markup: MAIN_KB });

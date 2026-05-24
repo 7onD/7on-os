@@ -13,8 +13,8 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const _todayStr = new Date().toISOString().slice(0, 10);
-  // Tasks done before today are archived; tasks done today stay in "Выполнено" until midnight
-  const isArchived = (t) => t.done && (t.done_at ? t.done_at < _todayStr : true);
+  // Any done task is immediately hidden from all views (goes straight to archive)
+  const isArchived = (t) => !!t.done;
 
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {
@@ -46,9 +46,8 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       ? list.filter(isArchived)
       : list.filter(t => !isArchived(t));
     if (filter === 'open' || filter === 'all') res = res.filter(t => !t.done);
-    else if (filter === 'done')    res = res.filter(t => t.done);
     else if (filter === 'high')    res = res.filter(t => t.priority === 'high' && !t.done);
-    else if (filter === 'archive') { /* already filtered */ }
+    else if (filter === 'archive') { /* already filtered — all done tasks */ }
     return sortTasks(res);
   };
 
@@ -65,7 +64,20 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     onNavConsumed && onNavConsumed();
   }, [navTarget]);
 
-  const handleToggle = async (id, done) => { await toggleTask(id, done); await refresh(); };
+  const handleToggle = async (id, done) => {
+    await toggleTask(id, done);
+    if (done) {
+      const task = allTasks.find(t => t.id === id);
+      if (task) {
+        const linkedEv = D.EVENTS.find(e =>
+          e.task_id === id ||
+          (!e.task_id && (e.title||'').trim() === (task.title||'').trim() && (e.event_date||'') === (task.due||''))
+        );
+        if (linkedEv) await deleteEvent(linkedEv.id);
+      }
+    }
+    await refresh();
+  };
   const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
 
   const handleAdd = async () => {
@@ -175,6 +187,13 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     const newDone = !detailForm.done;
     setDetailForm(f => ({ ...f, done: newDone }));
     await toggleTask(detailTask.id, newDone);
+    if (newDone) {
+      const linkedEv = D.EVENTS.find(e =>
+        e.task_id === detailTask.id ||
+        (!e.task_id && (e.title||'').trim() === (detailTask.title||'').trim() && (e.event_date||'') === (detailTask.due||''))
+      );
+      if (linkedEv) await deleteEvent(linkedEv.id);
+    }
     await refresh();
   };
 
@@ -365,7 +384,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="page-header">
         <div>
           <h2>Задачи</h2>
-          <div className="subtitle">{allTasks.filter(t => !t.done && !isArchived(t)).length} открытых · {allTasks.filter(t => t.done && !isArchived(t)).length} выполнено</div>
+          <div className="subtitle">{allTasks.filter(t => !t.done).length} открытых · {allTasks.filter(isArchived).length} выполнено</div>
         </div>
         <div className="actions">
           <button className="btn primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Задача</button>
@@ -373,10 +392,9 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       </div>
 
       <div className="filters">
-        {[['all','Открытые',allTasks.filter(t=>!t.done&&!isArchived(t)).length],
+        {[['all','Открытые',allTasks.filter(t=>!t.done).length],
           ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length],
-          ['done','Выполнено',allTasks.filter(t=>t.done&&!isArchived(t)).length],
-          ['archive','Архив',allTasks.filter(isArchived).length]].map(([id,label,num]) => (
+          ['archive','Выполненные',allTasks.filter(isArchived).length]].map(([id,label,num]) => (
           <button key={id} className="filter" data-on={filter===id?'1':'0'} onClick={() => setFilter(id)}>
             {label} <span className="num">{num}</span>
           </button>
