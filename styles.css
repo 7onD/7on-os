@@ -655,6 +655,7 @@ button {
   height: 64px;
   position: relative;
   padding: 3px;
+  min-width: 0;
 }
 .fcal-event {
   position: absolute;

@@ -171,7 +171,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
                 style={{ display: 'flex', gap: 10, padding: '6px 0', alignItems: 'baseline', borderBottom: i < calDayEvents.length - 1 || dayTasks.length > 0 ? '1px solid var(--border)' : 0, cursor: 'pointer' }}
                 onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('calendar', { kind: 'event', id: e.id })}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-faint)', minWidth: 50, flexShrink: 0 }}>{formatTime(e.start)}</span>
-                <span style={{ fontSize: 12.5, flex: 1 }}>{e.title}</span>
+                <span style={{ fontSize: 12.5, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
                 {(() => {
                   const color = evKindColor(e.kind);
                   const hex = color.startsWith('#') ? color : null;

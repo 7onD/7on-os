@@ -292,7 +292,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   // ── Week view ──────────────────────────────────────────────────────────────
   const renderWeekView = () => (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:16 }} className="cal-desktop">
-      <div className="fcal" style={{ gridTemplateRows:`auto auto repeat(${HOURS.length}, ${cellH}px)` }}>
+      <div className="fcal" style={{ gridTemplateRows:`auto 54px repeat(${HOURS.length}, ${cellH}px)` }}>
         <div className="fcal-corner" />
         {DAYS.map(d => (
           <div key={d.num} className="fcal-dow" data-today={d.today ? '1' : '0'}>
@@ -300,24 +300,24 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           </div>
         ))}
         {/* All-day events row */}
-        <div className="fcal-hour" style={{ fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
+        <div className="fcal-hour" style={{ height:54, boxSizing:'border-box', fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
         {DAYS.map((d, di) => {
           const allDay = D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start === -1);
           const dayIso = dayToIso(DAYS[di]);
           const dayDeadlines = allTasksList.filter(t => !t.done && t.deadline === dayIso);
           return (
-            <div key={di} className="fcal-cell" style={{ minHeight:24, padding:'2px 3px', display:'flex', flexWrap:'wrap', gap:2, alignContent:'flex-start' }}>
+            <div key={di} className="fcal-cell" style={{ height:54, overflow:'hidden', padding:'2px 3px', display:'flex', flexDirection:'column', gap:2, alignContent:'flex-start' }}>
               {allDay.map(e => {
                 const color = KIND_COLORS[e.kind] || '#888';
                 return (
-                  <div key={e.id} style={{ background:`${color}22`, borderLeft:`2px solid ${color}`, color, borderRadius:3, padding:'1px 5px', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%', cursor:'pointer' }}
+                  <div key={e.id} style={{ background:`${color}22`, borderLeft:`2px solid ${color}`, color, borderRadius:3, padding:'1px 5px', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:'100%', boxSizing:'border-box', flexShrink:0, cursor:'pointer' }}
                     onClick={ev => openDetail(ev, e)}>
                     {e.title}
                   </div>
                 );
               })}
               {dayDeadlines.map(t => (
-                <div key={`dl-${t.id}`} style={{ background:'rgba(255,107,122,0.15)', borderLeft:'2px solid var(--red)', color:'var(--red)', borderRadius:3, padding:'1px 5px', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%', cursor:'pointer', fontWeight:600 }}
+                <div key={`dl-${t.id}`} style={{ background:'rgba(255,107,122,0.15)', borderLeft:'2px solid var(--red)', color:'var(--red)', borderRadius:3, padding:'1px 5px', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:'100%', boxSizing:'border-box', flexShrink:0, cursor:'pointer', fontWeight:600 }}
                   onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('tasks', { kind:'task', id: t.id })}>
                   ⚑ {t.title}
                 </div>
@@ -452,19 +452,19 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         {/* All-day row for day view */}
         {(allDayEvs.length > 0 || dayViewDeadlines.length > 0) && (
           <>
-            <div className="fcal-hour" style={{ fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
-            <div className="fcal-cell" style={{ padding:'4px 6px', display:'flex', flexWrap:'wrap', gap:4 }}>
+            <div className="fcal-hour" style={{ height:54, boxSizing:'border-box', fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
+            <div className="fcal-cell" style={{ height:54, overflow:'hidden', padding:'4px 6px', display:'flex', flexDirection:'column', gap:3 }}>
               {allDayEvs.map(e => {
                 const color = KIND_COLORS[e.kind] || '#888';
                 return (
-                  <div key={e.id} style={{ background:`${color}22`, borderLeft:`2px solid ${color}`, color, borderRadius:3, padding:'2px 8px', fontSize:11, cursor:'pointer' }}
+                  <div key={e.id} style={{ background:`${color}22`, borderLeft:`2px solid ${color}`, color, borderRadius:3, padding:'2px 8px', fontSize:11, cursor:'pointer', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0 }}
                     onClick={ev => openDetail(ev, e)}>
                     {e.title}
                   </div>
                 );
               })}
               {dayViewDeadlines.map(t => (
-                <div key={`dl-${t.id}`} style={{ background:'rgba(255,107,122,0.15)', borderLeft:'2px solid var(--red)', color:'var(--red)', borderRadius:3, padding:'2px 8px', fontSize:11, cursor:'pointer', fontWeight:600 }}
+                <div key={`dl-${t.id}`} style={{ background:'rgba(255,107,122,0.15)', borderLeft:'2px solid var(--red)', color:'var(--red)', borderRadius:3, padding:'2px 8px', fontSize:11, cursor:'pointer', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0 }}
                   onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('tasks', { kind:'task', id: t.id })}>
                   ⚑ {t.title}
                 </div>
