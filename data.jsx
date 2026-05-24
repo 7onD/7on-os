@@ -93,11 +93,13 @@ async function updateTask(id, updates) {
 
 // ── CONTACTS ─────────────────────────────────────────────────────────────────
 async function createContact({ name, phone, addr, params, last_contact, days_since, status, next, next_when, notes }) {
+  const id = 'c' + Date.now();
   await apiPost('contacts', {
-    id: 'c' + Date.now(), name, phone: phone || '', addr: addr || '', params: params || '',
+    id, name, phone: phone || '', addr: addr || '', params: params || '',
     last_contact: last_contact || '', days_since: days_since || 0,
     status, next: next || '', next_when: next_when || '', notes: notes || '',
   });
+  return id;
 }
 async function updateContact(id, updates) { await apiPatch('contacts', id, updates); }
 async function deleteContact(id) { await apiDel('contacts', id); }
@@ -134,9 +136,10 @@ async function updateBigGoal(id, fields) { await apiPatch('big_goals', id, field
 async function deleteBigGoal(id) { await apiDel('big_goals', id); }
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
-async function createEvent({ day, start, end, title, kind, description, reminder, event_date, task_id }) {
+async function createEvent({ day, start, end, title, kind, description, reminder, event_date, task_id, contact_id }) {
   const body = { day, start_time: start, end_time: end, title, kind, description: description || '', reminder: reminder ?? -1, event_date: event_date || '' };
-  if (task_id) body.task_id = task_id;
+  if (task_id)    body.task_id    = task_id;
+  if (contact_id) body.contact_id = contact_id;
   await apiPost('events', body);
 }
 async function updateEvent(id, updates) {

@@ -767,8 +767,9 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                 onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
             </div>
             <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
-              <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px' }}
-                disabled={DAYS[mobileDayIdx].today && weekOffset === mobileTodayOffset}
+              <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px',
+                opacity: DAYS[mobileDayIdx].today && weekOffset === mobileTodayOffset ? 0.35 : 1,
+                pointerEvents: DAYS[mobileDayIdx].today && weekOffset === mobileTodayOffset ? 'none' : 'auto' }}
                 onClick={() => { setWeekOffset(mobileTodayOffset); setMobileDayIdx(mobileTodayIdx); }}>
                 Сегодня
               </button>
@@ -951,7 +952,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <button className="btn" onClick={() => setWeekOffset(o => o - 1)}><Icon name="chevron-left" size={12} /></button>
               <div className="mono cal-date-label" style={{ fontSize:14, fontWeight:500, whiteSpace:'nowrap' }}>{weekLabel}</div>
               <button className="btn" onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
-              <button className="btn ghost" onClick={() => { setWeekOffset(todayWeekOffset); setCalView('day'); setViewDayIdx((new Date().getDay()+6)%7); }}>Сегодня</button>
+              <button className="btn ghost" onClick={() => { setWeekOffset(todayWeekOffset); setViewDayIdx((new Date().getDay()+6)%7); }}>Сегодня</button>
             </>
           ) : (
             <div style={{ width:4 }} />
