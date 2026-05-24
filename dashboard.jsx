@@ -97,7 +97,16 @@ const Dashboard = ({ D, setRoute, refresh }) => {
   return (
     <div>
       <div className="grid cols-12">
-        {/* Top KPI row */}
+
+        {/* ── Row 1: Global goals — full width at top ── */}
+        <div className="card" style={{ gridColumn: 'span 12' }}>
+          <div className="card-header">
+            <div className="card-title">🎯 Глобальные цели</div>
+          </div>
+          <BigGoalsWidget goals={D.BIG_GOALS || []} refresh={refresh} />
+        </div>
+
+        {/* ── Row 2: KPI tasks (4) + KPI contacts (4) + Calendar (4) ── */}
         <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="stat-label">Открытых задач</div>
           <div className="stat-big mono">
@@ -119,37 +128,6 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <span style={{ fontSize: 11, color: 'var(--accent)' }}>{D.CONTACTS.filter(c=>c.status==='work').length} в работе</span>
             <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{D.CONTACTS.filter(c=>c.status==='cold').length} холодных</span>
           </div>
-        </div>
-
-        {/* Personal tasks */}
-        <div className="card" style={{ gridColumn: 'span 4' }}>
-          <div className="card-header">
-            <div className="card-title">Личные задачи <span className="count">{personalCount}</span></div>
-            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
-          </div>
-          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
-        </div>
-
-        {/* Work tasks */}
-        <div className="card" style={{ gridColumn: 'span 4' }}>
-          <div className="card-header">
-            <div className="card-title">
-              Рабочие задачи <span className="count">{workCount}</span>
-            </div>
-            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
-          </div>
-          <TaskDragList tasks={sortForDash(D.WORK_TASKS.filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
-        </div>
-
-        {/* Study tasks */}
-        <div className="card" style={{ gridColumn: 'span 4' }}>
-          <div className="card-header">
-            <div className="card-title">
-              Учебные задачи <span className="count">{studyCount}</span>
-            </div>
-            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
-          </div>
-          <TaskDragList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
         </div>
 
         {/* Mini calendar */}
@@ -194,14 +172,32 @@ const Dashboard = ({ D, setRoute, refresh }) => {
           </div>
         </div>
 
-        {/* Global goals */}
-        <div className="card" style={{ gridColumn: 'span 8' }}>
+        {/* ── Row 3: Task lists — personal (4) + work (4) + study (4) ── */}
+        <div className="card" style={{ gridColumn: 'span 4' }}>
           <div className="card-header">
-            <div className="card-title">🎯 Глобальные цели</div>
+            <div className="card-title">Личные задачи <span className="count">{personalCount}</span></div>
+            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <BigGoalsWidget goals={D.BIG_GOALS || []} refresh={refresh} />
+          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
         </div>
 
+        <div className="card" style={{ gridColumn: 'span 4' }}>
+          <div className="card-header">
+            <div className="card-title">Рабочие задачи <span className="count">{workCount}</span></div>
+            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
+          </div>
+          <TaskDragList tasks={sortForDash(D.WORK_TASKS.filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
+        </div>
+
+        <div className="card" style={{ gridColumn: 'span 4' }}>
+          <div className="card-header">
+            <div className="card-title">Учебные задачи <span className="count">{studyCount}</span></div>
+            <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
+          </div>
+          <TaskDragList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
+        </div>
+
+        {/* ── Row 4: Hot leads — full width ── */}
         {/* Hot leads */}
         <div className="card" style={{ gridColumn: 'span 12' }}>
           <div className="card-header">
