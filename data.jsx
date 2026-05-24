@@ -80,6 +80,7 @@ async function toggleTask(id, done) {
 async function createTask({ title, due, time, priority, type, tag, description, reminder, deadline }) {
   const id = (type === 'personal' ? 'p' : type === 'work' ? 'w' : 'e') + Date.now();
   await apiPost('tasks', { id, title, due: due || '', time: time || '', priority, type, tag: tag || null, done: 0, description: description || '', reminder: reminder ?? -1, deadline: deadline || null });
+  return id;
 }
 async function deleteTask(id) { await apiDel('tasks', id); }
 async function updateTask(id, updates) {
@@ -121,8 +122,10 @@ async function createGoal({ name, target, current }) {
 async function deleteGoal(id) { await apiDel('goals', id); }
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
-async function createEvent({ day, start, end, title, kind, description, reminder, event_date }) {
-  await apiPost('events', { day, start_time: start, end_time: end, title, kind, description: description || '', reminder: reminder ?? -1, event_date: event_date || '' });
+async function createEvent({ day, start, end, title, kind, description, reminder, event_date, task_id }) {
+  const body = { day, start_time: start, end_time: end, title, kind, description: description || '', reminder: reminder ?? -1, event_date: event_date || '' };
+  if (task_id) body.task_id = task_id;
+  await apiPost('events', body);
 }
 async function updateEvent(id, updates) {
   const p = { ...updates };

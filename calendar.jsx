@@ -2,7 +2,7 @@
 const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [showAdd, setShowAdd]       = React.useState(false);
   const [saving, setSaving]         = React.useState(false);
-  const [form, setForm]             = React.useState(() => { const _d = new Date(); const _t = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`; return { title: '', date: _t, start: '10', end: '11', kind: 'personal', description: '', reminder: '-1' }; });
+  const [form, setForm]             = React.useState(() => { const _d = new Date(); const _t = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`; return { title: '', date: _t, start: '10', end: '11', kind: 'personal', description: '', reminder: '-1', allDay: false }; });
   const [detailEvent, setDetailEvent] = React.useState(null);
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
@@ -32,6 +32,13 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const TAGS = D.CAL_TAGS || [];
   const KIND_LABELS = { deal:'Сделка', work:'Работа', meeting:'Встреча', personal:'Личное', contact:'Контакт', ...Object.fromEntries(TAGS.map(t => [t.id, t.name])) };
   const KIND_COLORS = { deal:'var(--violet)', work:'var(--accent)', meeting:'var(--orange)', personal:'var(--blue)', contact:'#5ee5a0', ...Object.fromEntries(TAGS.map(t => [t.id, t.color])) };
+
+  // All tasks (for deadline markers)
+  const allTasksList = [...(D.PERSONAL_TASKS||[]), ...(D.WORK_TASKS||[]), ...(D.STUDY_TASKS||[])];
+  const deadlinesByDate = {};
+  allTasksList.filter(t => !t.done && t.deadline).forEach(t => {
+    (deadlinesByDate[t.deadline] = deadlinesByDate[t.deadline] || []).push(t);
+  });
 
   const TAG_PALETTE = ['#d4ff4d','#b78cff','#ffb45e','#7aa7ff','#ff6b7a','#5ee5a0','#4ad7d1','#74c0fc','#ff9a3c','#f06595'];
 
@@ -65,7 +72,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const setDE = (k, v) => setDetailForm(f => ({ ...f, [k]: v }));
 
   const openSlot = (dayIdx, hour) => {
-    setForm(f => ({ ...f, date: dayToIso(DAYS[dayIdx]), start: String(hour), end: String(hour + 1) }));
+    setForm(f => ({ ...f, date: dayToIso(DAYS[dayIdx]), start: String(hour), end: String(hour + 1), allDay: false }));
     setShowAdd(true);
   };
 
@@ -108,13 +115,14 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     try {
       await createEvent({
         title: form.title.trim(), day: 1,
-        start: parseFloat(form.start), end: parseFloat(form.end),
+        start: form.allDay ? -1 : parseFloat(form.start),
+        end:   form.allDay ? -1 : parseFloat(form.end),
         kind: form.kind, description: form.description, reminder: parseInt(form.reminder),
         event_date: form.date,
       });
       await refresh();
       setShowAdd(false);
-      setForm(f => ({ ...f, title: '', description: '', reminder: '-1' }));
+      setForm(f => ({ ...f, title: '', description: '', reminder: '-1', allDay: false }));
     } finally { setSaving(false); }
   };
 
@@ -295,6 +303,8 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         <div className="fcal-hour" style={{ fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
         {DAYS.map((d, di) => {
           const allDay = D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start === -1);
+          const dayIso = dayToIso(DAYS[di]);
+          const dayDeadlines = allTasksList.filter(t => !t.done && t.deadline === dayIso);
           return (
             <div key={di} className="fcal-cell" style={{ minHeight:24, padding:'2px 3px', display:'flex', flexWrap:'wrap', gap:2, alignContent:'flex-start' }}>
               {allDay.map(e => {
@@ -306,6 +316,12 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   </div>
                 );
               })}
+              {dayDeadlines.map(t => (
+                <div key={`dl-${t.id}`} style={{ background:'rgba(255,107,122,0.15)', borderLeft:'2px solid var(--red)', color:'var(--red)', borderRadius:3, padding:'1px 5px', fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%', cursor:'pointer', fontWeight:600 }}
+                  onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('tasks', { kind:'task', id: t.id })}>
+                  ⚑ {t.title}
+                </div>
+              ))}
             </div>
           );
         })}
@@ -411,6 +427,8 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     const day = DAYS[viewDayIdx];
     const allDayEvs  = D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start === -1);
     const timedGroups = groupOverlappingEvents(D.EVENTS.filter(e => eventMatchesDay(e, viewDayIdx) && e.start !== -1));
+    const dayViewIso = dayToIso(DAYS[viewDayIdx]);
+    const dayViewDeadlines = allTasksList.filter(t => !t.done && t.deadline === dayViewIso);
     return (
       <div style={{ display:'grid', gridTemplateColumns:'60px 1fr', gap:0 }} className="cal-desktop">
         <div />
@@ -432,7 +450,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             disabled={DAYS[viewDayIdx].today}>Сегодня</button>
         </div>
         {/* All-day row for day view */}
-        {allDayEvs.length > 0 && (
+        {(allDayEvs.length > 0 || dayViewDeadlines.length > 0) && (
           <>
             <div className="fcal-hour" style={{ fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
             <div className="fcal-cell" style={{ padding:'4px 6px', display:'flex', flexWrap:'wrap', gap:4 }}>
@@ -445,6 +463,12 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   </div>
                 );
               })}
+              {dayViewDeadlines.map(t => (
+                <div key={`dl-${t.id}`} style={{ background:'rgba(255,107,122,0.15)', borderLeft:'2px solid var(--red)', color:'var(--red)', borderRadius:3, padding:'2px 8px', fontSize:11, cursor:'pointer', fontWeight:600 }}
+                  onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('tasks', { kind:'task', id: t.id })}>
+                  ⚑ {t.title}
+                </div>
+              ))}
             </div>
           </>
         )}
@@ -532,18 +556,29 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     color: isToday ? '#0a0a0a' : 'var(--text)', marginBottom:4,
                   }}>{c.d}</div>
                   {/* Colored dots */}
-                  <div style={{ display:'flex', gap:3, flexWrap:'wrap', justifyContent:'center', minHeight:8 }}>
-                    {evs.slice(0, 3).map((e, ei) => (
-                      <div key={ei} style={{ width:6, height:6, borderRadius:'50%', background: KIND_COLORS[e.kind] || '#888', flexShrink:0 }} />
-                    ))}
-                    {evs.length > 3 && <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--text-faint)', flexShrink:0 }} />}
-                  </div>
+                  {(() => {
+                    const compactDls = c.cur ? (deadlinesByDate[cellDate] || []) : [];
+                    const totalDots = evs.length + compactDls.length;
+                    return (
+                      <div style={{ display:'flex', gap:3, flexWrap:'wrap', justifyContent:'center', minHeight:8 }}>
+                        {evs.slice(0, 3).map((e, ei) => (
+                          <div key={ei} style={{ width:6, height:6, borderRadius:'50%', background: KIND_COLORS[e.kind] || '#888', flexShrink:0 }} />
+                        ))}
+                        {compactDls.length > 0 && <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--red)', flexShrink:0 }} />}
+                        {totalDots > 4 && <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--text-faint)', flexShrink:0 }} />}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             }
 
             // ── Desktop full cell ──────────────────────────────────────────
             const maxVisible = 3;
+            const cellDeadlines = c.cur ? (deadlinesByDate[cellDate] || []) : [];
+            const visibleEvs = evs.slice(0, maxVisible);
+            const visibleDls = cellDeadlines.slice(0, Math.max(0, maxVisible - visibleEvs.length));
+            const totalHidden = (evs.length - visibleEvs.length) + (cellDeadlines.length - visibleDls.length);
             return (
               <div key={i} className="cal-month-cell"
                 style={{ opacity: c.cur ? 1 : 0.3 }}
@@ -558,7 +593,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                   background: isToday ? 'var(--accent)' : 'transparent',
                   color: isToday ? '#0a0a0a' : 'var(--text)', marginBottom:4, flexShrink:0,
                 }}>{c.d}</div>
-                {evs.slice(0, maxVisible).map(e => (
+                {visibleEvs.map(e => (
                   <div key={e.id} className="month-ev-item" style={{
                     fontSize:10.5, padding:'2px 5px', borderRadius:4, marginBottom:2,
                     background: `${KIND_COLORS[e.kind] || '#888'}22`,
@@ -566,7 +601,14 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
                   }} onClick={ev => { ev.stopPropagation(); openDetail(ev, e); }}>{e.title}</div>
                 ))}
-                {evs.length > maxVisible && <div style={{ fontSize:10, color:'var(--text-faint)', fontFamily:'var(--font-mono)' }}>+{evs.length - maxVisible}</div>}
+                {visibleDls.map(t => (
+                  <div key={`dl-${t.id}`} className="month-ev-item" style={{
+                    fontSize:10.5, padding:'2px 5px', borderRadius:4, marginBottom:2,
+                    background:'rgba(255,107,122,0.15)', color:'var(--red)', fontWeight:600,
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                  }} onClick={ev => { ev.stopPropagation(); window.SEVEN_NAV && window.SEVEN_NAV('tasks', { kind:'task', id: t.id }); }}>⚑ {t.title}</div>
+                ))}
+                {totalHidden > 0 && <div style={{ fontSize:10, color:'var(--text-faint)', fontFamily:'var(--font-mono)' }}>+{totalHidden}</div>}
               </div>
             );
           })}
@@ -613,6 +655,10 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               const dayTasks = [...(D.PERSONAL_TASKS || []), ...(D.WORK_TASKS || []), ...(D.STUDY_TASKS || [])]
                 .filter(t => t.due === monthSelDate && !t.done)
                 .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+              // Tasks whose deadline falls on selected date (but due is different day)
+              const dayDeadlineItems = [...(D.PERSONAL_TASKS || []), ...(D.WORK_TASKS || []), ...(D.STUDY_TASKS || [])]
+                .filter(t => t.deadline === monthSelDate && t.due !== monthSelDate && !t.done)
+                .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
               const MONTHS_FULL_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
               const isSelToday = monthSelDate === todayIso;
               return (
@@ -623,7 +669,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                     </div>
                     {isSelToday && <span className="tag" style={{ fontSize:10 }}>сегодня</span>}
                   </div>
-                  {dayEvs.length === 0 && dayTasks.length === 0 ? (
+                  {dayEvs.length === 0 && dayTasks.length === 0 && dayDeadlineItems.length === 0 ? (
                     <div style={{ padding:'24px 0', textAlign:'center', color:'var(--text-faint)', fontFamily:'var(--font-mono)', fontSize:12,
                       border:'1.5px dashed var(--border)', borderRadius:14 }}>
                       Нет событий
@@ -662,6 +708,24 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                           <span style={{ fontSize:10.5, padding:'3px 8px', borderRadius:5, flexShrink:0,
                             background:'rgba(212,255,77,0.08)', color:'var(--accent)', fontFamily:'var(--font-mono)', fontWeight:500 }}>
                             задача
+                          </span>
+                        </div>
+                      ))}
+                      {dayDeadlineItems.map(t => (
+                        <div key={`dl-${t.id}`} style={{ display:'flex', gap:10, padding:'12px 14px', background:'rgba(255,107,122,0.06)',
+                          borderRadius:12, alignItems:'center', cursor:'pointer', border:'1px solid rgba(255,107,122,0.2)' }}
+                          onClick={() => window.SEVEN_NAV && window.SEVEN_NAV('tasks', { kind:'task', id: t.id })}>
+                          <div style={{ width:3, borderRadius:2, alignSelf:'stretch', background:'var(--red)', flexShrink:0 }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13.5, fontWeight:500, marginBottom:2, color:'var(--red)' }}>⚑ {t.title}</div>
+                            <div className="mono" style={{ fontSize:10.5, color:'var(--text-faint)' }}>
+                              дедлайн
+                              {t.due && <span style={{ marginLeft:6 }}>· срок {t.due}</span>}
+                            </div>
+                          </div>
+                          <span style={{ fontSize:10.5, padding:'3px 8px', borderRadius:5, flexShrink:0,
+                            background:'rgba(255,107,122,0.12)', color:'var(--red)', fontFamily:'var(--font-mono)', fontWeight:500 }}>
+                            дедлайн
                           </span>
                         </div>
                       ))}
@@ -759,7 +823,13 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <Field label="Название"><FInput placeholder="Показ квартиры" value={form.title} onChange={e => set('title', e.target.value)} autoFocus /></Field>
           <div className="form-row">
             <Field label="День">
-              <FInput type="date" value={form.date} onChange={e => set('date', e.target.value)} style={{ flex:1, minWidth:0, width:'100%' }} />
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <FInput type="date" value={form.date} onChange={e => set('date', e.target.value)} style={{ flex:1, minWidth:0 }} />
+                <label style={{ display:'flex', gap:5, alignItems:'center', cursor:'pointer', whiteSpace:'nowrap', fontSize:12, color:'var(--text-dim)', flexShrink:0 }}>
+                  <input type="checkbox" checked={form.allDay} onChange={e => set('allDay', e.target.checked)} style={{ accentColor:'var(--accent)', width:14, height:14 }} />
+                  Весь день
+                </label>
+              </div>
             </Field>
             {TAGS.length > 0 && (
               <Field label="Тег">
@@ -769,10 +839,12 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               </Field>
             )}
           </div>
-          <div className="form-row">
-            <Field label="Начало (ч)"><FInput type="number" min="8" max="19" value={form.start} onChange={e => set('start', e.target.value)} /></Field>
-            <Field label="Конец (ч)"><FInput type="number" min="8" max="20" value={form.end} onChange={e => set('end', e.target.value)} /></Field>
-          </div>
+          {!form.allDay && (
+            <div className="form-row">
+              <Field label="Начало (ч)"><FInput type="number" min="8" max="19" value={form.start} onChange={e => set('start', e.target.value)} /></Field>
+              <Field label="Конец (ч)"><FInput type="number" min="8" max="20" value={form.end} onChange={e => set('end', e.target.value)} /></Field>
+            </div>
+          )}
           <Field label="Заранее уведомить">
             <FSelect value={form.reminder} onChange={e => set('reminder', e.target.value)}>
               {(window.REMINDER_OPTIONS || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -801,11 +873,20 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                 </div>
                 <div className="task-detail-row">
                   <span className="stat-label" style={{ minWidth:80 }}>Время</span>
-                  <div style={{ display:'flex', gap:8, alignItems:'center', flex:1 }}>
-                    <FInput type="number" min="8" max="19" value={detailForm.start} onChange={e => setDE('start', e.target.value)} style={{ fontSize:13, width:70 }} />
-                    <span style={{ color:'var(--text-faint)' }}>—</span>
-                    <FInput type="number" min="8" max="20" value={detailForm.end} onChange={e => setDE('end', e.target.value)} style={{ fontSize:13, width:70 }} />
-                    <span className="mono" style={{ fontSize:11, color:'var(--text-faint)' }}>час</span>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flex:1, flexWrap:'wrap' }}>
+                    <label style={{ display:'flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:12.5, color:'var(--text-dim)', flexShrink:0 }}>
+                      <input type="checkbox"
+                        checked={parseFloat(detailForm.start) === -1}
+                        onChange={e => { if (e.target.checked) { setDE('start', '-1'); setDE('end', '-1'); } else { setDE('start', '10'); setDE('end', '11'); } }}
+                        style={{ accentColor:'var(--accent)', width:14, height:14 }} />
+                      Весь день
+                    </label>
+                    {parseFloat(detailForm.start) !== -1 && <>
+                      <FInput type="number" min="8" max="19" value={detailForm.start} onChange={e => setDE('start', e.target.value)} style={{ fontSize:13, width:70 }} />
+                      <span style={{ color:'var(--text-faint)' }}>—</span>
+                      <FInput type="number" min="8" max="20" value={detailForm.end} onChange={e => setDE('end', e.target.value)} style={{ fontSize:13, width:70 }} />
+                      <span className="mono" style={{ fontSize:11, color:'var(--text-faint)' }}>час</span>
+                    </>}
                   </div>
                 </div>
                 <div className="task-detail-row">

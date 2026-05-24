@@ -73,7 +73,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     setSaving(true);
     try {
       const effectiveTag = TYPE_TAG_DEFAULT[form.type] || 'Личное';
-      await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder), deadline: form.deadline || null });
+      const taskId = await createTask({ title: form.title.trim(), due: form.due, time: form.time, priority: form.priority, type: form.type, tag: effectiveTag, description: form.description, reminder: parseInt(form.reminder), deadline: form.deadline || null });
       // Auto-add to calendar if due date is set
       if (form.due) {
         const kindMap = { personal: 'personal', work: 'work', study: 'personal' };
@@ -82,7 +82,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           const [h, m] = form.time.split(':').map(Number);
           startF = h + m / 60; endF = Math.min(startF + 1, 20);
         }
-        await createEvent({ day: 1, start: startF, end: endF, title: form.title.trim(), kind: kindMap[form.type] || 'personal', description: '', reminder: -1, event_date: form.due });
+        await createEvent({ day: 1, start: startF, end: endF, title: form.title.trim(), kind: kindMap[form.type] || 'personal', description: '', reminder: -1, event_date: form.due, task_id: taskId });
       }
       await refresh();
       setShowAdd(false);
@@ -121,16 +121,43 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         reminder: parseInt(detailForm.reminder),
         deadline: detailForm.deadline || null,
       });
-      // Auto-add to calendar if due date was just added (was empty before)
-      if (detailForm.due && !detailTask.due) {
-        const kindMap = { personal: 'personal', work: 'work', study: 'personal' };
-        let startF = -1, endF = -1;
-        if (detailForm.time) {
-          const [h, m] = detailForm.time.split(':').map(Number);
-          startF = h + m / 60; endF = Math.min(startF + 1, 20);
+
+      // ── Sync linked calendar event ─────────────────────────────────────────
+      const kindMap = { personal: 'personal', work: 'work', study: 'personal' };
+      // Find event by task_id (new) or by matching title+date (legacy)
+      const linkedEvent = D.EVENTS.find(e =>
+        e.task_id === detailTask.id ||
+        (!e.task_id && (e.title || '').trim() === (detailTask.title || '').trim() && (e.event_date || '') === (detailTask.due || ''))
+      );
+      const dueChanged  = (detailForm.due  || '') !== (detailTask.due  || '');
+      const timeChanged = (detailForm.time || '') !== (detailTask.time || '');
+
+      if (linkedEvent) {
+        if (detailForm.due) {
+          if (dueChanged || timeChanged) {
+            let startF = -1, endF = -1;
+            if (detailForm.time) { const [h, m] = detailForm.time.split(':').map(Number); startF = h + m / 60; endF = Math.min(startF + 1, 20); }
+            await updateEvent(linkedEvent.id, {
+              title: detailForm.title, event_date: detailForm.due,
+              start: startF, end: endF,
+              kind: kindMap[detailTask.type] || 'personal',
+              description: linkedEvent.description || '',
+              reminder: linkedEvent.reminder ?? -1,
+              day: linkedEvent.day || 1,
+              task_id: detailTask.id,
+            });
+          }
+        } else {
+          // Due date cleared → remove linked event
+          await deleteEvent(linkedEvent.id);
         }
-        await createEvent({ day: 1, start: startF, end: endF, title: detailForm.title, kind: kindMap[detailTask.type] || 'personal', description: '', reminder: -1, event_date: detailForm.due });
+      } else if (detailForm.due && !detailTask.due) {
+        // Due date newly added, no existing event → create
+        let startF = -1, endF = -1;
+        if (detailForm.time) { const [h, m] = detailForm.time.split(':').map(Number); startF = h + m / 60; endF = Math.min(startF + 1, 20); }
+        await createEvent({ day: 1, start: startF, end: endF, title: detailForm.title, kind: kindMap[detailTask.type] || 'personal', description: '', reminder: -1, event_date: detailForm.due, task_id: detailTask.id });
       }
+
       await refresh();
       setDetailTask(null);
     } finally { setDetailSaving(false); }

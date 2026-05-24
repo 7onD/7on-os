@@ -46,8 +46,8 @@ async function fetchTable(t) {
 }
 
 // ─── Рендер строки ────────────────────────────────────────────────────────────
-// [ ║ ] [10:00] Название...  [⚡]
-function addRow(col, { barColor, time, title, overdue }) {
+// [ ║ ] [10:00] Название...  [⚡/⚑]
+function addRow(col, { barColor, time, title, overdue, deadline }) {
   const row = col.addStack()
   row.layoutHorizontally()
   row.centerAlignContent()
@@ -70,14 +70,19 @@ function addRow(col, { barColor, time, title, overdue }) {
   // Название (обрезается)
   const txt = row.addText(title)
   txt.font = Font.systemFont(10.5)
-  txt.textColor = overdue ? C.red : C.text
+  txt.textColor = overdue ? C.red : deadline ? C.orange : C.text
   txt.lineLimit = 1
   txt.minimumScaleFactor = 0.75
 
-  // ⚡ просрочено
+  // ⚡ просрочено / ⚑ дедлайн
   if (overdue) {
     const b = row.addText("⚡")
     b.font = Font.systemFont(9)
+    b.lineLimit = 1
+  } else if (deadline) {
+    const b = row.addText("⚑")
+    b.font = Font.systemFont(9)
+    b.textColor = C.orange
     b.lineLimit = 1
   }
 }
@@ -105,11 +110,14 @@ async function createWidget() {
     .map(t => ({...t, _ov: true}))
     .sort((a,b) => a.due.localeCompare(b.due))
 
-  // Задачи на сегодня
+  // Задачи на сегодня (по due) + задачи с дедлайном сегодня (но due в другой день)
   const todayTasks = tasks
-    .filter(t => !t.done && t.due === today)
-    .map(t => ({...t, _ov: false}))
-    .sort((a,b) => ({high:0,med:1,low:2}[a.priority]??1) - ({high:0,med:1,low:2}[b.priority]??1))
+    .filter(t => !t.done && (t.due === today || (t.deadline === today && t.due !== today)))
+    .map(t => ({...t, _ov: false, _dl: t.deadline === today && t.due !== today}))
+    .sort((a,b) => {
+      if (a._dl !== b._dl) return a._dl ? 1 : -1  // deadline-only tasks after due-tasks
+      return ({high:0,med:1,low:2}[a.priority]??1) - ({high:0,med:1,low:2}[b.priority]??1)
+    })
 
   const allTasks = [...overdueTasks, ...todayTasks]
 
@@ -239,10 +247,11 @@ async function createWidget() {
   } else {
     allTasks.slice(0, MAX).forEach(t => {
       addRow(right, {
-        barColor: t._ov ? C.red : (PRIO_CLR[t.priority] || C.faint),
+        barColor: t._ov ? C.red : t._dl ? C.orange : (PRIO_CLR[t.priority] || C.faint),
         time: t.time || null,
         title: t.title || "",
         overdue: t._ov,
+        deadline: t._dl || false,
       })
       right.addSpacer(4)
     })
