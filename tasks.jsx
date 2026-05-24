@@ -13,8 +13,8 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const _todayStr = new Date().toISOString().slice(0, 10);
-  // Any done task is immediately hidden from all views (goes straight to archive)
-  const isArchived = (t) => !!t.done;
+  // Tasks done before today are hidden completely; tasks done today stay in "Выполненные" until midnight
+  const isArchived = (t) => t.done && (t.done_at ? t.done_at < _todayStr : true);
 
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {
@@ -42,12 +42,11 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const filterTasks = (list) => {
-    let res = filter === 'archive'
-      ? list.filter(isArchived)
-      : list.filter(t => !isArchived(t));
+    // Always exclude tasks that have passed their day (hidden forever)
+    let res = list.filter(t => !isArchived(t));
     if (filter === 'open' || filter === 'all') res = res.filter(t => !t.done);
-    else if (filter === 'high')    res = res.filter(t => t.priority === 'high' && !t.done);
-    else if (filter === 'archive') { /* already filtered — all done tasks */ }
+    else if (filter === 'done') res = res.filter(t => t.done);
+    else if (filter === 'high') res = res.filter(t => t.priority === 'high' && !t.done);
     return sortTasks(res);
   };
 
@@ -384,7 +383,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="page-header">
         <div>
           <h2>Задачи</h2>
-          <div className="subtitle">{allTasks.filter(t => !t.done).length} открытых · {allTasks.filter(isArchived).length} выполнено</div>
+          <div className="subtitle">{allTasks.filter(t => !t.done && !isArchived(t)).length} открытых · {allTasks.filter(t => t.done && !isArchived(t)).length} выполнено сегодня</div>
         </div>
         <div className="actions">
           <button className="btn primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Задача</button>
@@ -392,9 +391,9 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       </div>
 
       <div className="filters">
-        {[['all','Открытые',allTasks.filter(t=>!t.done).length],
+        {[['all','Открытые',allTasks.filter(t=>!t.done&&!isArchived(t)).length],
           ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length],
-          ['archive','Выполненные',allTasks.filter(isArchived).length]].map(([id,label,num]) => (
+          ['done','Выполненные',allTasks.filter(t=>t.done&&!isArchived(t)).length]].map(([id,label,num]) => (
           <button key={id} className="filter" data-on={filter===id?'1':'0'} onClick={() => setFilter(id)}>
             {label} <span className="num">{num}</span>
           </button>

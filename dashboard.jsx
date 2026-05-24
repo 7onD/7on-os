@@ -7,8 +7,8 @@ const Dashboard = ({ D, setRoute, refresh }) => {
 
   const _todayD = new Date();
   const todayIso = `${_todayD.getFullYear()}-${String(_todayD.getMonth()+1).padStart(2,'0')}-${String(_todayD.getDate()).padStart(2,'0')}`;
-  // Any done task is immediately hidden (same logic as tasks.jsx)
-  const isArchivedDash = (t) => !!t.done;
+  // Tasks done before today are hidden; tasks done today stay visible until midnight
+  const isArchivedDash = (t) => t.done && (t.done_at ? t.done_at < todayIso : true);
   const [calDay, setCalDay] = React.useState(todayIso);
 
   // eventsByDate keyed by ISO date — works for ALL months, no hardcoding
