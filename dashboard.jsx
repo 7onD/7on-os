@@ -7,8 +7,9 @@ const Dashboard = ({ D, setRoute, refresh }) => {
 
   const _todayD = new Date();
   const todayIso = `${_todayD.getFullYear()}-${String(_todayD.getMonth()+1).padStart(2,'0')}-${String(_todayD.getDate()).padStart(2,'0')}`;
-  // Tasks done before today are hidden; tasks done today stay visible until midnight
-  const isArchivedDash = (t) => t.done && (t.done_at ? t.done_at < todayIso : true);
+  // Show open tasks + tasks done today; hide tasks done on previous days
+  const isDoneTodayDash  = (t) => !!t.done && t.done_at === todayIso;
+  const isHiddenDash     = (t) => !!t.done && t.done_at !== todayIso; // not today → hide from lists
   const [calDay, setCalDay] = React.useState(todayIso);
 
   // eventsByDate keyed by ISO date — works for ALL months, no hardcoding
@@ -126,7 +127,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Личные задачи <span className="count">{personalCount}</span></div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isArchivedDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
+          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
         </div>
 
         {/* Work tasks */}
@@ -138,7 +139,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             </div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.WORK_TASKS.filter(t => !isArchivedDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
+          <TaskDragList tasks={sortForDash(D.WORK_TASKS.filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
         </div>
 
         {/* Study tasks */}
@@ -150,7 +151,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             </div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isArchivedDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
+          <TaskDragList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isHiddenDash(t))).slice(0, 6)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
         </div>
 
         {/* Mini calendar */}

@@ -13,8 +13,10 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const _todayStr = new Date().toISOString().slice(0, 10);
-  // Tasks done before today are hidden completely; tasks done today stay in "Выполненные" until midnight
-  const isArchived = (t) => t.done && (t.done_at ? t.done_at < _todayStr : true);
+  // "done today" = marked done AND done_at matches today
+  const isDoneToday = (t) => !!t.done && t.done_at === _todayStr;
+  // "done before today" = marked done but NOT today (legacy no done_at also goes here)
+  const isDoneBefore = (t) => !!t.done && t.done_at !== _todayStr;
 
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {
@@ -42,12 +44,18 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   };
 
   const filterTasks = (list) => {
-    // Exclude tasks done before today (gone forever)
-    let res = list.filter(t => !isArchived(t));
-    // "all" / "open" shows both open tasks AND tasks done today (they stay until midnight)
-    if (filter === 'open' || filter === 'all') { /* show everything not archived */ }
-    else if (filter === 'high') res = res.filter(t => t.priority === 'high' && !t.done);
-    return sortTasks(res);
+    if (filter === 'all' || filter === 'open') {
+      // Open tasks + tasks marked done TODAY (stay visible until midnight)
+      return sortTasks(list.filter(t => !t.done || isDoneToday(t)));
+    }
+    if (filter === 'done') {
+      // Tasks done before today (landed here at midnight)
+      return sortTasks(list.filter(isDoneBefore));
+    }
+    if (filter === 'high') {
+      return sortTasks(list.filter(t => t.priority === 'high' && !t.done));
+    }
+    return sortTasks(list);
   };
 
   const personal = filterTasks(D.PERSONAL_TASKS);
@@ -383,7 +391,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       <div className="page-header">
         <div>
           <h2>Задачи</h2>
-          <div className="subtitle">{allTasks.filter(t => !t.done && !isArchived(t)).length} открытых · {allTasks.filter(t => t.done && !isArchived(t)).length} выполнено</div>
+          <div className="subtitle">{allTasks.filter(t => !t.done).length} открытых · {allTasks.filter(isDoneToday).length} выполнено сегодня</div>
         </div>
         <div className="actions">
           <button className="btn primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={13} /> Задача</button>
@@ -391,8 +399,9 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
       </div>
 
       <div className="filters">
-        {[['all','Открытые',allTasks.filter(t=>!isArchived(t)).length],
-          ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length]].map(([id,label,num]) => (
+        {[['all','Открытые',allTasks.filter(t=>!t.done||isDoneToday(t)).length],
+          ['high','Приоритет',allTasks.filter(t=>t.priority==='high'&&!t.done).length],
+          ['done','Выполненные',allTasks.filter(isDoneBefore).length]].map(([id,label,num]) => (
           <button key={id} className="filter" data-on={filter===id?'1':'0'} onClick={() => setFilter(id)}>
             {label} <span className="num">{num}</span>
           </button>
