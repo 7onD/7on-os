@@ -434,7 +434,10 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         <div />
         <div style={{ display:'flex', gap:6, marginBottom:8, alignItems:'center' }}>
           <button className="icon-btn" style={{ width:28, height:28 }}
-            onClick={() => setViewDayIdx(i => Math.max(0, i - 1))} disabled={viewDayIdx === 0}>
+            onClick={() => {
+              if (viewDayIdx === 0) { setWeekOffset(o => o - 1); setViewDayIdx(6); }
+              else setViewDayIdx(i => i - 1);
+            }}>
             <Icon name="chevron-left" size={13} />
           </button>
           <div className="mono" style={{ fontSize:14, fontWeight:500 }}>
@@ -442,12 +445,15 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             {day.today && <span className="tag" style={{ marginLeft:8, fontSize:10 }}>сегодня</span>}
           </div>
           <button className="icon-btn" style={{ width:28, height:28 }}
-            onClick={() => setViewDayIdx(i => Math.min(6, i + 1))} disabled={viewDayIdx === 6}>
+            onClick={() => {
+              if (viewDayIdx === 6) { setWeekOffset(o => o + 1); setViewDayIdx(0); }
+              else setViewDayIdx(i => i + 1);
+            }}>
             <Icon name="chevron-right" size={13} />
           </button>
-          <button className="btn ghost" style={{ marginLeft:4 }}
-            onClick={() => { setWeekOffset(todayWeekOffset); setViewDayIdx((new Date().getDay() + 6) % 7); }}
-            disabled={DAYS[viewDayIdx].today}>Сегодня</button>
+          <button className="btn ghost"
+            style={{ marginLeft:4, opacity: DAYS[viewDayIdx].today ? 0.4 : 1 }}
+            onClick={() => { setWeekOffset(todayWeekOffset); setViewDayIdx((new Date().getDay() + 6) % 7); }}>Сегодня</button>
         </div>
         {/* All-day row for day view */}
         {(allDayEvs.length > 0 || dayViewDeadlines.length > 0) && (
@@ -767,9 +773,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                 onClick={() => setWeekOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
             </div>
             <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
-              <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px',
-                opacity: DAYS[mobileDayIdx].today && weekOffset === mobileTodayOffset ? 0.35 : 1,
-                pointerEvents: DAYS[mobileDayIdx].today && weekOffset === mobileTodayOffset ? 'none' : 'auto' }}
+              <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px' }}
                 onClick={() => { setWeekOffset(mobileTodayOffset); setMobileDayIdx(mobileTodayIdx); }}>
                 Сегодня
               </button>
