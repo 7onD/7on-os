@@ -759,7 +759,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <Field label="Название"><FInput placeholder="Показ квартиры" value={form.title} onChange={e => set('title', e.target.value)} autoFocus /></Field>
           <div className="form-row">
             <Field label="День">
-              <FInput type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+              <FInput type="date" value={form.date} onChange={e => set('date', e.target.value)} style={{ flex:1, minWidth:0, width:'100%' }} />
             </Field>
             {TAGS.length > 0 && (
               <Field label="Тег">

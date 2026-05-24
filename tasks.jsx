@@ -13,8 +13,8 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const _todayStr = new Date().toISOString().slice(0, 10);
-  const _archiveCutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0,10); })();
-  const isArchived = (t) => t.done && t.done_at && t.done_at < _archiveCutoff;
+  // Tasks done before today are archived; tasks done today stay in "Выполнено" until midnight
+  const isArchived = (t) => t.done && (t.done_at ? t.done_at < _todayStr : true);
 
   const PRIO_ORDER = { high: 0, med: 1, low: 2 };
   const sortTasks = (list) => {

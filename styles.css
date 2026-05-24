@@ -1497,7 +1497,8 @@ button {
   background: var(--surface);
   padding: 6px 8px;
   cursor: pointer;
-  min-height: 90px;
+  height: 110px;
+  overflow: hidden;
 }
 /* Mobile Apple-style compact grid wrapper */
 @media (max-width: 768px) {
@@ -1510,7 +1511,8 @@ button {
 }
 @media (max-width: 768px) {
   .cal-month-cell {
-    min-height: 58px !important;
+    height: 72px !important;
+    overflow: hidden !important;
     padding: 4px 3px !important;
   }
   .cal-month-cell .month-ev-item {
