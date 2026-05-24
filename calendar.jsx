@@ -14,7 +14,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [calView, setCalView]       = React.useState('week'); // 'week' | 'day' | 'month'
   const [viewDayIdx, setViewDayIdx] = React.useState(() => (new Date().getDay() + 6) % 7); // 0=Mon
   const [monthOffset, setMonthOffset] = React.useState(0);  // for month view navigation
-  const [mobileDayIdx, setMobileDayIdx] = React.useState(() => (new Date().getDay() + 6) % 7); // 0=Mon … 6=Sun, selected day in mobile week strip
+  const [mobileSelDate, setMobileSelDate] = React.useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; }); // ISO date of selected mobile day
   const [monthSelDate, setMonthSelDate] = React.useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; });
   const [newTagName, setNewTagName]     = React.useState('');
   const [newTagColor, setNewTagColor]   = React.useState('#d4ff4d');
@@ -632,9 +632,10 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   // ── Mobile calendar — Apple-style: week strip + selected day events ──────
   const renderMobileList = () => {
-    const selDay   = DAYS[mobileDayIdx] || null;
-    const selDate  = selDay ? dayToIso(selDay) : null;
-    const selEvents = D.EVENTS.filter(e => e.event_date === selDate).sort((a,b) => (a.start??99)-(b.start??99));
+    // Find which DAYS index matches the selected ISO date (may be -1 if selected date not in current week)
+    const mobileSelIdx = DAYS.findIndex(d => dayToIso(d) === mobileSelDate);
+    const selDay = mobileSelIdx >= 0 ? DAYS[mobileSelIdx] : null;
+    const selEvents = D.EVENTS.filter(e => e.event_date === mobileSelDate).sort((a,b) => (a.start??99)-(b.start??99));
 
     return (
       <div className="cal-mobile">
@@ -752,15 +753,15 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             {/* Week navigation strip */}
             <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4 }}>
               <button className="icon-btn" style={{ width:28, height:28, flexShrink:0 }}
-                onClick={() => setWeekOffset(o => o - 1)}>
+                onClick={() => { setWeekOffset(o => o - 1); setMobileSelDate(s => shiftIso(s, -7)); }}>
                 <Icon name="chevron-left" size={12} /></button>
               <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:2 }}>
                 {DAYS.map((d, di) => {
                   const iso = dayToIso(d);
                   const hasEv = D.EVENTS.some(e => e.event_date === iso);
-                  const isSel = di === mobileDayIdx;
+                  const isSel = iso === mobileSelDate;
                   return (
-                    <button key={di} onClick={() => setMobileDayIdx(di)}
+                    <button key={di} onClick={() => setMobileSelDate(iso)}
                       style={{
                         display:'flex', flexDirection:'column', alignItems:'center', gap:1,
                         padding:'5px 1px', borderRadius:10, border:'none', cursor:'pointer',
@@ -777,19 +778,19 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
                 })}
               </div>
               <button className="icon-btn" style={{ width:28, height:28, flexShrink:0 }}
-                onClick={() => setWeekOffset(o => o + 1)}>
+                onClick={() => { setWeekOffset(o => o + 1); setMobileSelDate(s => shiftIso(s, 7)); }}>
                 <Icon name="chevron-right" size={12} /></button>
             </div>
             <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
               <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px' }}
-                onClick={() => { setWeekOffset(todayWeekOffset); setMobileDayIdx((new Date().getDay() + 6) % 7); }}>
+                onClick={() => { setWeekOffset(todayWeekOffset); setMobileSelDate(todayIso); }}>
                 Сегодня
               </button>
             </div>
 
             {/* Selected day header */}
             <div style={{ fontFamily:'var(--font-mono)', fontSize:12.5, fontWeight:500, marginBottom:10, color:'var(--text-dim)' }}>
-              {selDay ? `${selDay.dow}, ${selDay.num} ${MONTHS_SHORT[selDay.month]}` : ''}
+              {selDay ? `${selDay.dow}, ${selDay.num} ${MONTHS_SHORT[selDay.month]}` : mobileSelDate}
               {selDay?.today && <span className="tag" style={{ marginLeft:8, fontSize:10 }}>сегодня</span>}
             </div>
 
