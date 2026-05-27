@@ -107,6 +107,43 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     return `${d} ${MONTHS_RU_SHORT[m - 1]}`;
   };
 
+  const renderContactRow = (c) => (
+    <div key={c.id} className="contact-row" onClick={() => openContact(c.id)}
+      style={{ background: c.id === selected ? 'var(--surface-2)' : 'transparent' }}>
+      <div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div className="contact-name">{c.name}</div>
+          <span className="contact-status-dot-mobile" style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, background: c.status==='hot'?'var(--red)':c.status==='work'?'var(--accent)':c.status==='warm'?'var(--orange)':'#555' }} />
+        </div>
+        {c.phone && <div className="contact-phone">{c.phone}</div>}
+        <div className="contact-mobile-info">
+          <span style={{ color: c.status==='hot'?'var(--red)':c.status==='work'?'var(--accent)':c.status==='warm'?'var(--orange)':'var(--text-faint)' }}>
+            {D.STATUS_LABEL[c.status] || c.status}
+          </span>
+          {c.addr && <span>{c.addr}</span>}
+        </div>
+      </div>
+      <div className="contact-col-hide">
+        <div className="contact-addr">{c.addr}</div>
+        <div className="contact-addr params">{c.params}</div>
+      </div>
+      <div className="contact-col-hide">
+        <div className="contact-date">{fmtDate(c.lastContact)}</div>
+        <div className="mono" style={{ fontSize:10.5, color: c.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)' }}>
+          {c.daysSince === 0 ? 'сегодня' : `${c.daysSince} дн. назад`}
+        </div>
+      </div>
+      <div className="contact-col-hide"><StatusTag status={c.status} /></div>
+      <div className="contact-col-hide contact-next">{c.next}<span className="when">{fmtDate(c.nextWhen)}</span></div>
+      <div style={{ color:'var(--text-faint)' }}>
+        <button className="icon-btn" style={{ width:28, height:28 }}
+          onClick={e => { e.stopPropagation(); handleDelete(c.id); }}>
+          <Icon name="trash" size={13} />
+        </button>
+      </div>
+    </div>
+  );
+
   // NOTE: renderContactFormFields is a render-function (NOT a component — no <X />).
   // Defining it as a component inside ContactsPage would cause focus loss on each keystroke
   // because React would see a new function reference each render and remount the entire form.
@@ -204,42 +241,30 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <div className="contact-col-hide">Следующий шаг</div>
               <div></div>
             </div>
-            {filtered.map(c => (
-              <div key={c.id} className="contact-row" onClick={() => openContact(c.id)}
-                style={{ background: c.id === selected ? 'var(--surface-2)' : 'transparent' }}>
-                <div>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <div className="contact-name">{c.name}</div>
-                    <span className="contact-status-dot-mobile" style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, background: c.status==='hot'?'var(--red)':c.status==='work'?'var(--accent)':c.status==='warm'?'var(--orange)':'#555' }} />
-                  </div>
-                  {c.phone && <div className="contact-phone">{c.phone}</div>}
-                  <div className="contact-mobile-info">
-                    <span style={{ color: c.status==='hot'?'var(--red)':c.status==='work'?'var(--accent)':c.status==='warm'?'var(--orange)':'var(--text-faint)' }}>
-                      {D.STATUS_LABEL[c.status] || c.status}
-                    </span>
-                    {c.addr && <span>{c.addr}</span>}
-                  </div>
-                </div>
-                <div className="contact-col-hide">
-                  <div className="contact-addr">{c.addr}</div>
-                  <div className="contact-addr params">{c.params}</div>
-                </div>
-                <div className="contact-col-hide">
-                  <div className="contact-date">{fmtDate(c.lastContact)}</div>
-                  <div className="mono" style={{ fontSize:10.5, color: c.daysSince >= 14 ? 'var(--orange)' : 'var(--text-faint)' }}>
-                    {c.daysSince === 0 ? 'сегодня' : `${c.daysSince} дн. назад`}
-                  </div>
-                </div>
-                <div className="contact-col-hide"><StatusTag status={c.status} /></div>
-                <div className="contact-col-hide contact-next">{c.next}<span className="when">{fmtDate(c.nextWhen)}</span></div>
-                <div style={{ color:'var(--text-faint)' }}>
-                  <button className="icon-btn" style={{ width:28, height:28 }}
-                    onClick={e => { e.stopPropagation(); handleDelete(c.id); }}>
-                    <Icon name="trash" size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
+            {(() => {
+              if (filter !== 'all') return filtered.map(renderContactRow);
+              const work  = filtered.filter(c => c.status === 'work');
+              const other = filtered.filter(c => c.status !== 'work');
+              return (
+                <>
+                  {work.length > 0 && (
+                    <div style={{ padding:'6px 16px', background:'var(--surface-2)', borderBottom:'1px solid var(--border)',
+                      fontFamily:'var(--font-mono)', fontSize:10.5, color:'var(--accent)', textTransform:'uppercase', letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--accent)', display:'inline-block' }} />
+                      В работе · {work.length}
+                    </div>
+                  )}
+                  {work.map(renderContactRow)}
+                  {other.length > 0 && work.length > 0 && (
+                    <div style={{ padding:'6px 16px', background:'var(--surface)', borderBottom:'1px solid var(--border)',
+                      fontFamily:'var(--font-mono)', fontSize:10.5, color:'var(--text-faint)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                      Остальные · {other.length}
+                    </div>
+                  )}
+                  {other.map(renderContactRow)}
+                </>
+              );
+            })()}
             {filtered.length === 0 && <div className="placeholder" style={{ margin:20 }}>Нет контактов</div>}
           </div>
         </div>

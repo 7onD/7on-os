@@ -18,7 +18,7 @@ const LockScreen = ({ onUnlock }) => {
       .catch(() => {});
   }, []);
 
-  const tryUnlock = async () => {
+  const tryUnlock = async (silent = false) => {
     if (!pwd || checking) return;
     setChecking(true);
     try {
@@ -31,16 +31,24 @@ const LockScreen = ({ onUnlock }) => {
       if (data.ok) {
         sessionStorage.setItem('7on_auth', '1');
         onUnlock();
-      } else {
+      } else if (!silent) {
         setErr(true); setPwd('');
         setTimeout(() => setErr(false), 1500);
       }
     } catch (e) {
-      // Network error — fallback: still block access, don't reveal password
-      setErr(true); setPwd('');
-      setTimeout(() => setErr(false), 1500);
+      if (!silent) {
+        setErr(true); setPwd('');
+        setTimeout(() => setErr(false), 1500);
+      }
     } finally { setChecking(false); }
   };
+
+  // Auto-attempt after each keystroke (silent — no error on wrong partial input)
+  React.useEffect(() => {
+    if (!pwd) return;
+    const timer = setTimeout(() => tryUnlock(true), 400);
+    return () => clearTimeout(timer);
+  }, [pwd]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:24, background:'var(--bg)', position:'relative', overflow:'hidden' }}>

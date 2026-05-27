@@ -210,6 +210,117 @@ async function saveNotified(storToken, notified) {
   } catch {}
 }
 
+// ── ICS import: SPBU Blackboard calendar ────────────────────────────────────
+const SPBU_ICS_URL = 'https://bb.spbu.ru/webapps/calendar/calendarFeed/54b94590fd744b02811116e98e038293/learn.ics';
+const BB_TAG_COLOR = '#4ad7d1';
+
+function parseIcs(text) {
+  const events = [];
+  const raw = text.replace(/\r\n /g, '').replace(/\r\n\t/g, ''); // unfold
+  const vevents = raw.split('BEGIN:VEVENT').slice(1);
+
+  for (const block of vevents) {
+    const end = block.indexOf('END:VEVENT');
+    const content = end > -1 ? block.slice(0, end) : block;
+
+    const getField = (key) => {
+      const m = content.match(new RegExp(`^${key}(?:;[^:]*)?:(.*)$`, 'im'));
+      return m ? m[1].trim() : '';
+    };
+
+    const dtstart = getField('DTSTART');
+    const dtend   = getField('DTEND');
+    const summary = getField('SUMMARY').replace(/\\,/g, ',').replace(/\\n/g, ' ').replace(/\\;/g, ';').replace(/\\$/g, '');
+    const uid     = getField('UID');
+
+    if (!dtstart || !summary) continue;
+
+    const parseDT = (dt) => {
+      const isUtc = dt.endsWith('Z');
+      const s = dt.replace(/Z$/, '').replace(/[^0-9T]/g, '');
+      if (s.length <= 8) {
+        return { date: `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`, time: -1 };
+      }
+      const year = s.slice(0, 4), mon = s.slice(4, 6), day = s.slice(6, 8);
+      const hh = parseInt(s.slice(9, 11) || s.slice(8, 10) || '0', 10);
+      const mm = parseInt(s.slice(11, 13) || s.slice(10, 12) || '0', 10);
+      if (isUtc) {
+        const d = new Date(`${year}-${mon}-${day}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00Z`);
+        d.setTime(d.getTime() + 3 * 3600 * 1000);
+        const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+        return { date: iso, time: d.getUTCHours() + d.getUTCMinutes() / 60 };
+      }
+      return { date: `${year}-${mon}-${day}`, time: hh + mm / 60 };
+    };
+
+    const start = parseDT(dtstart);
+    const end2  = dtend ? parseDT(dtend) : null;
+    events.push({
+      uid,
+      title: summary,
+      date: start.date,
+      startTime: start.time,
+      endTime: end2 ? end2.time : (start.time === -1 ? -1 : Math.min(start.time + 1.5, 23)),
+    });
+  }
+  return events;
+}
+
+async function syncSpbuIcs(storToken) {
+  const r = await fetch(SPBU_ICS_URL, { headers: { 'User-Agent': '7on-os/1.0' } });
+  if (!r.ok) throw new Error(`ICS fetch failed: ${r.status}`);
+  const text = await r.text();
+  const parsed = parseIcs(text);
+
+  // Ensure BB tag exists
+  const tags = await getTable(storToken, 'cal_tags');
+  let bbTag = tags.find(t => t.name === 'BB');
+  if (!bbTag) {
+    bbTag = { id: 'tag-bb-spbu', name: 'BB', color: BB_TAG_COLOR };
+    tags.push(bbTag);
+    await saveTable(storToken, 'cal_tags', tags);
+  }
+  const bbKind = bbTag.id;
+
+  // Load existing events, find BB events (ics_uid set)
+  const allEvents = await getTable(storToken, 'events');
+  const existing  = allEvents.filter(e => e.ics_uid);
+  const existMap  = Object.fromEntries(existing.map(e => [e.ics_uid, e]));
+  const newUids   = new Set(parsed.map(e => e.uid).filter(Boolean));
+
+  // Remove stale BB events no longer in ICS
+  const toDelete = existing.filter(e => !newUids.has(e.ics_uid));
+  const kept     = allEvents.filter(e => !toDelete.find(d => d.id === e.id));
+
+  // Add or update
+  for (const ev of parsed) {
+    if (!ev.uid) continue;
+    const old = existMap[ev.uid];
+    if (!old) {
+      const d = new Date(ev.date + 'T00:00:00');
+      const dow = d.getDay();
+      kept.push({
+        id: 'ics-' + ev.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-12),
+        ics_uid: ev.uid,
+        title: ev.title,
+        kind: bbKind,
+        start_time: ev.startTime,
+        end_time: ev.endTime,
+        event_date: ev.date,
+        day: dow === 0 ? 7 : dow,
+        description: 'Импорт SPBU BB',
+        reminder: -1,
+      });
+    } else {
+      // Update title/time if changed
+      Object.assign(old, { title: ev.title, start_time: ev.startTime, end_time: ev.endTime, event_date: ev.date });
+    }
+  }
+
+  await saveTable(storToken, 'events', kept);
+  return { added: parsed.length - existing.length + toDelete.length, deleted: toDelete.length, total: parsed.length };
+}
+
 async function runReminderCheck(storToken, { debug = false, force = false } = {}) {
   const ownerId = process.env.TG_OWNER_ID;
   if (!ownerId) return { ok: false, reason: 'TG_OWNER_ID not set' };
@@ -423,6 +534,7 @@ module.exports.handler = async (event) => {
       const [result] = await Promise.all([
         runReminderCheck(storToken),
         runMorningBrief(storToken),
+        syncSpbuIcs(storToken).catch(e => ({ error: e.message })),
       ]);
       return { statusCode: 200, body: JSON.stringify(result) };
     } catch (e) {
@@ -454,6 +566,13 @@ module.exports.handler = async (event) => {
       const storToken = await getToken();
       await saveNotified(storToken, {});
       return reply({ ok: true, cleared: true, message: 'tg_notified.json сброшен — уведомления снова будут приходить' });
+    }
+
+    // ── sync-spbu-ics: manual ICS sync trigger ──────────────────────────────
+    if (action === 'sync-spbu-ics') {
+      const storToken = await getToken();
+      const result = await syncSpbuIcs(storToken);
+      return reply({ ok: true, ...result });
     }
 
     // ── bot-setup: register Telegram webhook (call once) ─────────────────────

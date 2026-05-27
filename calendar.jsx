@@ -787,7 +787,14 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             </div>
             <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
               <button className="btn ghost" style={{ fontSize:11, padding:'3px 10px' }}
-                onClick={() => { setWeekOffset(todayWeekOffset); setMobileSelDate(todayIso); }}>
+                onClick={() => {
+                  const n = new Date();
+                  const iso = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+                  n.setHours(0,0,0,0);
+                  const off = Math.floor((n.getTime() - BASE_MON.getTime()) / (7*24*60*60*1000));
+                  setWeekOffset(off);
+                  setMobileSelDate(iso);
+                }}>
                 Сегодня
               </button>
             </div>
