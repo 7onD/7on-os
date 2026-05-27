@@ -1665,6 +1665,10 @@ button {
   }
 }
 
+/* Contact backdrop — hidden on desktop, visible only on mobile/tablet */
+.contact-backdrop { display: none; }
+@media (max-width: 1024px) { .contact-backdrop { display: block; } }
+
 /* ═══ TABLET (iPad 769–1024px) ══════════════════════════════════════════════ */
 @media (min-width: 769px) and (max-width: 1024px) {
   /* Contacts: panel becomes centred modal overlay */

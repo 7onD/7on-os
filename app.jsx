@@ -81,27 +81,32 @@ const LockScreen = ({ onUnlock }) => {
             ))}
           </div>
           {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--red)', marginTop:-8 }}>Неверный пароль</div>}
-          {/* 3×4 numpad grid */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, width:252 }}>
-            {[1,2,3,4,5,6,7,8,9,null,0,'⌫'].map((k, i) => (
-              <button key={i}
-                onClick={() => {
-                  if (k === '⌫') { setPwd(p => p.slice(0,-1)); setErr(false); }
-                  else if (k !== null) addDigit(k);
-                }}
-                style={{
-                  height: 68, borderRadius: 16,
-                  border: k === null ? 'none' : '1px solid var(--border)',
-                  background: k === null ? 'transparent' : 'var(--surface)',
-                  color: k === '⌫' ? 'var(--text-dim)' : 'var(--text)',
-                  fontSize: k === '⌫' ? 20 : 22,
-                  fontFamily: 'var(--font-mono)',
-                  cursor: k === null ? 'default' : 'pointer',
-                  visibility: k === null ? 'hidden' : 'visible',
-                  WebkitTapHighlightColor: 'transparent',
-                }}>
-                {k}
-              </button>
+          {/* 3×4 numpad — flex rows to guarantee 3-per-row on all iOS */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {[[1,2,3],[4,5,6],[7,8,9],[null,0,'⌫']].map((row, ri) => (
+              <div key={ri} style={{ display:'flex', gap:10 }}>
+                {row.map((k, ci) => (
+                  <button key={ci}
+                    onClick={() => {
+                      if (k === '⌫') { setPwd(p => p.slice(0,-1)); setErr(false); }
+                      else if (k !== null) addDigit(k);
+                    }}
+                    style={{
+                      width: 76, height: 68, borderRadius: 16,
+                      border: k === null ? 'none' : '1px solid var(--border)',
+                      background: k === null ? 'transparent' : 'var(--surface)',
+                      color: k === '⌫' ? 'var(--text-dim)' : 'var(--text)',
+                      fontSize: k === '⌫' ? 20 : 22,
+                      fontFamily: 'var(--font-mono)',
+                      cursor: k === null ? 'default' : 'pointer',
+                      visibility: k === null ? 'hidden' : 'visible',
+                      WebkitTapHighlightColor: 'transparent',
+                      flexShrink: 0,
+                    }}>
+                    {k}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
           <button
