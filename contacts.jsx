@@ -14,7 +14,10 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const cur = D.CONTACTS.find(c => c.id === selected);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const openContact = (id) => { setSelected(id); setMobileOpen(true); };
+  const openContact = (id) => {
+    setSelected(id);
+    if (window.innerWidth <= 1024) setMobileOpen(true);
+  };
 
   React.useEffect(() => {
     if (!navTarget || navTarget.kind !== 'contact') return;
