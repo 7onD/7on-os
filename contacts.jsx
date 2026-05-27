@@ -286,6 +286,7 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               <div style={{ display:'flex', gap:4 }}>
                 <button className="icon-btn" onClick={() => handleDelete(cur.id)} title="Удалить"><Icon name="trash" size={14} /></button>
                 <button className="icon-btn" onClick={startEdit} title="Редактировать"><Icon name="edit" size={14} /></button>
+                <button className="icon-btn contact-close-btn" onClick={() => setMobileOpen(false)} title="Закрыть" style={{ marginLeft:4 }}><Icon name="x" size={16} /></button>
               </div>
             </div>
 

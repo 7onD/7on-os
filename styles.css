@@ -1024,19 +1024,24 @@ button {
   .cal-desktop { display: none !important; }
   .cal-mobile { display: block !important; }
 
-  /* Contacts panel → full-screen modal style */
+  /* Contacts panel → bottom-sheet overlay */
   .contacts-layout { grid-template-columns: 1fr !important; }
   .contact-detail-panel { display: none !important; }
   .contact-detail-panel.mobile-open {
     display: flex !important;
-    position: fixed;
-    inset: 0;
-    z-index: 300;
+    position: fixed !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 300 !important;
     overflow-y: auto;
-    border-radius: 0;
-    border: none;
-    align-self: unset;
-    max-height: none;
+    border-radius: 16px 16px 0 0 !important;
+    border: 1px solid var(--border-strong) !important;
+    border-bottom: none !important;
+    align-self: unset !important;
+    max-height: 82vh;
+    width: 100% !important;
   }
 
   /* Contact table columns simplified */
@@ -1668,9 +1673,11 @@ button {
 /* Contact backdrop + back button — hidden on desktop, visible only on mobile/tablet */
 .contact-backdrop { display: none; }
 .contact-back-btn { display: none; }
+.contact-close-btn { display: none; }
 @media (max-width: 1024px) {
   .contact-backdrop { display: block; }
   .contact-back-btn { display: flex; }
+  .contact-close-btn { display: flex !important; }
 }
 
 /* ═══ TABLET (iPad 769–1024px) ══════════════════════════════════════════════ */
