@@ -1026,7 +1026,7 @@ button {
 
   /* Contacts panel → full-screen modal style */
   .contacts-layout { grid-template-columns: 1fr !important; }
-  .contact-detail-panel { display: none; }
+  .contact-detail-panel { display: none !important; }
   .contact-detail-panel.mobile-open {
     display: flex !important;
     position: fixed;
@@ -1677,7 +1677,7 @@ button {
 @media (min-width: 769px) and (max-width: 1024px) {
   /* Contacts: panel becomes centred modal overlay */
   .contacts-layout { grid-template-columns: 1fr !important; }
-  .contact-detail-panel { display: none; }
+  .contact-detail-panel { display: none !important; }
   .contact-detail-panel.mobile-open {
     display: flex !important;
     position: fixed !important;
