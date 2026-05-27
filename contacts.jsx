@@ -287,7 +287,7 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             </div>
 
             {mobileOpen && (
-              <button className="btn ghost" style={{ marginBottom:12, alignSelf:'flex-start' }} onClick={() => setMobileOpen(false)}>
+              <button className="btn ghost contact-back-btn" style={{ marginBottom:12, alignSelf:'flex-start' }} onClick={() => setMobileOpen(false)}>
                 <Icon name="arrow-left" size={14} /> Назад
               </button>
             )}

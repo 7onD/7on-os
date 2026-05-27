@@ -1665,9 +1665,13 @@ button {
   }
 }
 
-/* Contact backdrop — hidden on desktop, visible only on mobile/tablet */
+/* Contact backdrop + back button — hidden on desktop, visible only on mobile/tablet */
 .contact-backdrop { display: none; }
-@media (max-width: 1024px) { .contact-backdrop { display: block; } }
+.contact-back-btn { display: none; }
+@media (max-width: 1024px) {
+  .contact-backdrop { display: block; }
+  .contact-back-btn { display: flex; }
+}
 
 /* ═══ TABLET (iPad 769–1024px) ══════════════════════════════════════════════ */
 @media (min-width: 769px) and (max-width: 1024px) {
