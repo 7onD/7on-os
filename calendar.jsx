@@ -188,15 +188,26 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     const height = Math.max((maxEnd - minStart) * cellH - 8, 28);
     const first  = group[0];
     const color  = KIND_COLORS[first.kind] || '#888';
+    const c2     = group.length > 1 ? (KIND_COLORS[group[1].kind] || color) : color;
+    const c3     = group.length > 2 ? (KIND_COLORS[group[2].kind] || color) : c2;
     const isExpanded = expandedStack === stackKey;
     const hasMany = group.length > 1;
 
+    // Offset shadow shows up to 3 colored card layers behind the main card
+    const stackShadow = hasMany
+      ? (group.length > 2
+        ? `4px 4px 0 0 ${c2}65, 8px 8px 0 0 ${c3}45`
+        : `4px 4px 0 0 ${c2}65`)
+      : undefined;
+
     return (
-      <div key={stackKey} style={{ position:'absolute', top, left:2, right:2, zIndex: isExpanded ? 20 : 2 }}>
+      // right:10 when stacked gives room for the shadow layers to be visible
+      <div key={stackKey} style={{ position:'absolute', top, left:2, right: hasMany ? 10 : 2, zIndex: isExpanded ? 20 : 2 }}>
         <div className="fcal-event"
           style={{ position:'relative', height, background:`${color}18`, borderLeftColor:color, color,
             cursor:'pointer', left:0, right:'auto', width:'100%', boxSizing:'border-box',
-            display:'flex', flexDirection:'column', justifyContent:'center' }}
+            display:'flex', flexDirection:'column', justifyContent:'center',
+            boxShadow: stackShadow }}
           onClick={e => { e.stopPropagation(); hasMany ? setExpandedStack(isExpanded ? null : stackKey) : openDetail(e, first); }}>
           <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:18 }}>
             <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{first.title}</div>
