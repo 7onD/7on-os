@@ -31,7 +31,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
   const TAGS = D.CAL_TAGS || [];
   const KIND_LABELS = { deal:'Сделка', work:'Работа', meeting:'Встреча', personal:'Личное', contact:'Контакт', ...Object.fromEntries(TAGS.map(t => [t.id, t.name])) };
-  const KIND_COLORS = { deal:'var(--violet)', work:'var(--accent)', meeting:'var(--orange)', personal:'var(--blue)', contact:'#5ee5a0', ...Object.fromEntries(TAGS.map(t => [t.id, t.color])) };
+  const KIND_COLORS = { deal:'#b78cff', work:'#d4ff4d', meeting:'#ffb45e', personal:'#7aa7ff', contact:'#5ee5a0', ...Object.fromEntries(TAGS.map(t => [t.id, t.color])) };
 
   // All tasks (for deadline markers)
   const allTasksList = [...(D.PERSONAL_TASKS||[]), ...(D.WORK_TASKS||[]), ...(D.STUDY_TASKS||[])];
@@ -156,13 +156,15 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   // Group overlapping events into stacks (connected-component approach)
   const groupOverlappingEvents = (events) => {
     const sorted = [...events].sort((a, b) => a.start - b.start);
+    // Zero-duration events get a 30-min effective end for grouping purposes
+    const effEnd = ev => (ev.end > ev.start ? ev.end : ev.start + 0.5);
     const groups = [];
     for (const ev of sorted) {
       let placed = false;
       for (const g of groups) {
-        const maxEnd = Math.max(...g.map(x => x.end));
+        const maxEnd   = Math.max(...g.map(effEnd));
         const minStart = Math.min(...g.map(x => x.start));
-        if (ev.start < maxEnd && ev.end > minStart) { g.push(ev); placed = true; break; }
+        if (ev.start < maxEnd && effEnd(ev) > minStart) { g.push(ev); placed = true; break; }
       }
       if (!placed) groups.push([ev]);
     }
@@ -179,42 +181,36 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   }, [expandedStack]);
 
   const renderEventStack = (group, stackKey) => {
+    const effEnd = ev => (ev.end > ev.start ? ev.end : ev.start + 0.5);
     const minStart = Math.min(...group.map(e => e.start));
-    const maxEnd   = Math.max(...group.map(e => e.end));
+    const maxEnd   = Math.max(...group.map(effEnd));
     const top    = (minStart - HOURS[0]) * cellH + 4;
     const height = Math.max((maxEnd - minStart) * cellH - 8, 28);
     const first  = group[0];
     const color  = KIND_COLORS[first.kind] || '#888';
-    const c2     = group.length > 1 ? (KIND_COLORS[group[1].kind] || color) : color;
-    const c3     = group.length > 2 ? (KIND_COLORS[group[2].kind] || color) : c2;
     const isExpanded = expandedStack === stackKey;
     const hasMany = group.length > 1;
 
-    // Box-shadow simulates stacked paper cards behind the face card
-    const stackShadow = hasMany
-      ? `3px 3px 0 0 ${c2}70, ${group.length > 2 ? `6px 6px 0 0 ${c3}45` : `3px 3px 0 1px ${c2}30`}`
-      : undefined;
-
     return (
       <div key={stackKey} style={{ position:'absolute', top, left:2, right:2, zIndex: isExpanded ? 20 : 2 }}>
-        {/* Face card — box-shadow gives depth without extra DOM elements */}
         <div className="fcal-event"
-          style={{ position:'relative', height, background:`${color}22`, borderLeftColor:color, color,
+          style={{ position:'relative', height, background:`${color}18`, borderLeftColor:color, color,
             cursor:'pointer', left:0, right:'auto', width:'100%', boxSizing:'border-box',
-            boxShadow: stackShadow }}
+            display:'flex', flexDirection:'column', justifyContent:'center' }}
           onClick={e => { e.stopPropagation(); hasMany ? setExpandedStack(isExpanded ? null : stackKey) : openDetail(e, first); }}>
-          <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', paddingRight: hasMany ? 22 : 14 }}>{first.title}</div>
-          <div className="when">{formatTime(first.start)} – {formatTime(first.end)}</div>
-          {hasMany && (
-            <div style={{ position:'absolute', top:4, right:18, background:color, color:'#111', borderRadius:8, fontSize:9, fontWeight:700, padding:'1px 5px', lineHeight:'14px', opacity:0.9 }}>
-              +{group.length - 1}
-            </div>
-          )}
+          <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:18 }}>
+            <div style={{ fontWeight:500, fontSize:11.5, flex:1, minWidth:0, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{first.title}</div>
+            {hasMany && (
+              <div style={{ background:`${color}40`, border:`1px solid ${color}80`, color, borderRadius:6, fontSize:9, fontWeight:700, padding:'0 4px', lineHeight:'14px', flexShrink:0 }}>
+                +{group.length - 1}
+              </div>
+            )}
+          </div>
+          {height >= 36 && <div className="when" style={{ marginTop:1 }}>{formatTime(first.start)} – {formatTime(effEnd(first))}</div>}
           <button onClick={e => { e.stopPropagation(); handleDeleteFromGrid(first.id); }}
-            style={{ position:'absolute', top:3, right:3, background:'none', border:'none', cursor:'pointer', color:'inherit', padding:'1px 3px', opacity:0.5, fontSize:13 }}>×</button>
+            style={{ position:'absolute', top:3, right:3, background:'none', border:'none', cursor:'pointer', color:'inherit', padding:'1px 3px', opacity:0.45, fontSize:13, lineHeight:1 }}>×</button>
         </div>
 
-        {/* Expanded list — stopPropagation prevents bubble-phase document listener from closing it */}
         {isExpanded && (
           <div style={{ position:'absolute', top:height + 4, left:0, right:0, minWidth:180, zIndex:40,
             background:'var(--surface-2)', border:'1px solid var(--border-strong)', borderRadius:8,
@@ -224,14 +220,14 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             {group.map((ev, i) => {
               const c = KIND_COLORS[ev.kind] || '#888';
               return (
-                <div key={ev.id}
+                <div key={ev.id + i}
                   style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', cursor:'pointer',
                     borderLeft:`3px solid ${c}`, background:`${c}12`,
                     borderBottom: i < group.length - 1 ? '1px solid var(--border)' : 'none' }}
                   onClick={e => { e.stopPropagation(); setExpandedStack(null); openDetail(e, ev); }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:500, color:c, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{ev.title}</div>
-                    <div style={{ fontSize:10.5, color:'var(--text-dim)', fontFamily:'var(--font-mono)', marginTop:2 }}>{formatTime(ev.start)} – {formatTime(ev.end)}</div>
+                    <div style={{ fontSize:10.5, color:'var(--text-dim)', fontFamily:'var(--font-mono)', marginTop:2 }}>{formatTime(ev.start)} – {formatTime(effEnd(ev))}</div>
                   </div>
                   <button onClick={e => { e.stopPropagation(); setExpandedStack(null); handleDeleteFromGrid(ev.id); }}
                     style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', fontSize:14, padding:'0 2px', flexShrink:0 }}>×</button>

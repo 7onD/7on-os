@@ -255,13 +255,10 @@ function parseIcs(text) {
 
     const start = parseDT(dtstart);
     const end2  = dtend ? parseDT(dtend) : null;
-    events.push({
-      uid,
-      title: summary,
-      date: start.date,
-      startTime: start.time,
-      endTime: end2 ? end2.time : (start.time === -1 ? -1 : Math.min(start.time + 1.5, 23)),
-    });
+    const st = start.time;
+    let et = end2 ? end2.time : null;
+    if (et === null || et === st) et = st === -1 ? -1 : Math.min(st + 1.5, 23);
+    events.push({ uid, title: summary, date: start.date, startTime: st, endTime: et });
   }
   return events;
 }
@@ -300,7 +297,7 @@ async function syncSpbuIcs(storToken) {
       const d = new Date(ev.date + 'T00:00:00');
       const dow = d.getDay();
       kept.push({
-        id: 'ics-' + ev.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-12),
+        id: 'ics-' + ev.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-8) + '-' + ev.date.replace(/-/g,''),
         ics_uid: ev.uid,
         title: ev.title,
         kind: bbKind,
