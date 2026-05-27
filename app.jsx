@@ -8,6 +8,7 @@ const LockScreen = ({ onUnlock }) => {
   const [err, setErr]           = React.useState(false);
   const [checking, setChecking] = React.useState(false);
   const [quickFiles, setQuickFiles] = React.useState([]);
+  const isTouch = React.useMemo(() => window.matchMedia('(pointer: coarse)').matches, []);
 
   React.useEffect(() => {
     fetch(`${_API_URL}?table=files`)
@@ -50,6 +51,13 @@ const LockScreen = ({ onUnlock }) => {
     return () => clearTimeout(timer);
   }, [pwd]);
 
+  const addDigit = (k) => {
+    if (pwd.length >= 8) return;
+    const next = pwd + String(k);
+    setPwd(next);
+    setErr(false);
+  };
+
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:24, background:'var(--bg)', position:'relative', overflow:'hidden' }}>
       <div style={{ width:52, height:52, borderRadius:14, background:'var(--accent)', color:'#0a0a0a', display:'grid', placeItems:'center', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:26, letterSpacing:'-0.04em' }}>7</div>
@@ -57,33 +65,82 @@ const LockScreen = ({ onUnlock }) => {
         <div style={{ fontFamily:'var(--font-mono)', fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:4 }}>7on OS</div>
         <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-faint)' }}>Введите пароль для входа</div>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
-        <input
-          type="password"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          autoComplete="current-password"
-          placeholder="••••••"
-          value={pwd}
-          onChange={e => { setPwd(e.target.value); setErr(false); }}
-          onKeyDown={e => e.key === 'Enter' && tryUnlock()}
-          autoFocus
-          style={{
-            background: err ? 'rgba(255,107,122,0.08)' : 'var(--surface)',
-            border: `1px solid ${err ? 'var(--red)' : 'var(--border-strong)'}`,
-            borderRadius: 10, padding: '11px 18px', color: 'var(--text)',
-            fontFamily: 'var(--font-mono)', fontSize: 18, outline: 'none', width: 220,
-            textAlign: 'center', letterSpacing: '0.25em', transition: 'border-color 0.2s',
-          }}
-        />
-        {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--red)' }}>Неверный пароль</div>}
-        <button
-          onClick={tryUnlock}
-          disabled={checking || !pwd}
-          style={{ padding:'10px 40px', borderRadius:10, background:'var(--accent)', border:0, color:'#0a0a0a', fontFamily:'var(--font-mono)', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:4, opacity: (checking || !pwd) ? 0.6 : 1 }}>
-          {checking ? 'Проверка…' : 'Войти'}
-        </button>
-      </div>
+
+      {isTouch ? (
+        /* ── Touch numpad (iPhone / iPad) ─────────────────────── */
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
+          {/* Dot indicators */}
+          <div style={{ display:'flex', gap:12 }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{
+                width: 14, height: 14, borderRadius: '50%',
+                background: i < pwd.length ? 'var(--accent)' : 'transparent',
+                border: `2px solid ${i < pwd.length ? 'var(--accent)' : 'var(--border-strong)'}`,
+                transition: 'background 0.15s',
+              }} />
+            ))}
+          </div>
+          {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--red)', marginTop:-8 }}>Неверный пароль</div>}
+          {/* 3×4 numpad grid */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, width:252 }}>
+            {[1,2,3,4,5,6,7,8,9,null,0,'⌫'].map((k, i) => (
+              <button key={i}
+                onClick={() => {
+                  if (k === '⌫') { setPwd(p => p.slice(0,-1)); setErr(false); }
+                  else if (k !== null) addDigit(k);
+                }}
+                style={{
+                  height: 68, borderRadius: 16,
+                  border: k === null ? 'none' : '1px solid var(--border)',
+                  background: k === null ? 'transparent' : 'var(--surface)',
+                  color: k === '⌫' ? 'var(--text-dim)' : 'var(--text)',
+                  fontSize: k === '⌫' ? 20 : 22,
+                  fontFamily: 'var(--font-mono)',
+                  cursor: k === null ? 'default' : 'pointer',
+                  visibility: k === null ? 'hidden' : 'visible',
+                  WebkitTapHighlightColor: 'transparent',
+                }}>
+                {k}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={tryUnlock}
+            disabled={checking || !pwd}
+            style={{ padding:'11px 48px', borderRadius:10, background:'var(--accent)', border:0, color:'#0a0a0a', fontFamily:'var(--font-mono)', fontWeight:600, fontSize:13, cursor:'pointer', opacity: (checking || !pwd) ? 0.5 : 1 }}>
+            {checking ? 'Проверка…' : 'Войти'}
+          </button>
+        </div>
+      ) : (
+        /* ── Desktop keyboard input ───────────────────────────── */
+        <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+          <input
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="current-password"
+            placeholder="••••••"
+            value={pwd}
+            onChange={e => { setPwd(e.target.value); setErr(false); }}
+            onKeyDown={e => e.key === 'Enter' && tryUnlock()}
+            autoFocus
+            style={{
+              background: err ? 'rgba(255,107,122,0.08)' : 'var(--surface)',
+              border: `1px solid ${err ? 'var(--red)' : 'var(--border-strong)'}`,
+              borderRadius: 10, padding: '11px 18px', color: 'var(--text)',
+              fontFamily: 'var(--font-mono)', fontSize: 18, outline: 'none', width: 220,
+              textAlign: 'center', letterSpacing: '0.25em', transition: 'border-color 0.2s',
+            }}
+          />
+          {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--red)' }}>Неверный пароль</div>}
+          <button
+            onClick={tryUnlock}
+            disabled={checking || !pwd}
+            style={{ padding:'10px 40px', borderRadius:10, background:'var(--accent)', border:0, color:'#0a0a0a', fontFamily:'var(--font-mono)', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:4, opacity: (checking || !pwd) ? 0.6 : 1 }}>
+            {checking ? 'Проверка…' : 'Войти'}
+          </button>
+        </div>
+      )}
       {quickFiles.length > 0 && (
         <div style={{ position:'absolute', bottom:28, left:'50%', transform:'translateX(-50%)', width:'min(480px, 90vw)' }}>
           <div style={{ fontFamily:'var(--font-mono)', fontSize:10.5, color:'var(--text-faint)', marginBottom:10, textAlign:'center', letterSpacing:'0.04em', textTransform:'uppercase' }}>

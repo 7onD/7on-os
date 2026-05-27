@@ -218,6 +218,11 @@ const ContactsPage = ({ D, refresh, navTarget, onNavConsumed }) => {
         </div>
       </div>
 
+      {mobileOpen && cur && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:299 }}
+          onClick={() => setMobileOpen(false)} />
+      )}
+
       <div style={{ display:'grid', gridTemplateColumns:'1fr 360px', gap:16 }} className="contacts-layout">
         <div>
           <div className="filters">

@@ -1665,3 +1665,34 @@ button {
   }
 }
 
+/* ═══ TABLET (iPad 769–1024px) ══════════════════════════════════════════════ */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Contacts: panel becomes centred modal overlay */
+  .contacts-layout { grid-template-columns: 1fr !important; }
+  .contact-detail-panel { display: none; }
+  .contact-detail-panel.mobile-open {
+    display: flex !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%);
+    width: min(500px, 90vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: 16px !important;
+    border: 1px solid var(--border-strong) !important;
+    z-index: 300;
+    align-self: unset;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    padding: 20px;
+  }
+
+  /* Contact row: hide extra columns like on mobile */
+  .contact-row { grid-template-columns: 1fr auto !important; }
+  .contact-row .contact-col-hide { display: none; }
+  .contact-status-dot-mobile { display: inline-block !important; }
+  .contact-mobile-info { display: flex !important; }
+}
+
