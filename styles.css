@@ -1024,10 +1024,9 @@ button {
   .cal-desktop { display: none !important; }
   .cal-mobile { display: block !important; }
 
-  /* Contacts panel → bottom-sheet overlay */
+  /* Contacts panel → bottom-sheet overlay with slide-up animation */
   .contacts-layout { grid-template-columns: 1fr !important; }
-  .contact-detail-panel { display: none !important; }
-  .contact-detail-panel.mobile-open {
+  .contact-detail-panel {
     display: flex !important;
     position: fixed !important;
     top: auto !important;
@@ -1035,13 +1034,22 @@ button {
     right: 0 !important;
     bottom: 0 !important;
     z-index: 300 !important;
-    overflow-y: auto;
+    overflow-y: auto !important;
     border-radius: 16px 16px 0 0 !important;
     border: 1px solid var(--border-strong) !important;
     border-bottom: none !important;
     align-self: unset !important;
-    max-height: 82vh;
+    max-height: 82vh !important;
     width: 100% !important;
+    transform: translateY(110%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+  }
+  .contact-detail-panel.mobile-open {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
   }
 
   /* Contact table columns simplified */
@@ -1674,34 +1682,42 @@ button {
 .contact-backdrop { display: none; }
 .contact-back-btn { display: none; }
 .contact-close-btn { display: none; }
+@keyframes contactBackdropIn { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 1024px) {
-  .contact-backdrop { display: block; }
+  .contact-backdrop { display: block; animation: contactBackdropIn 0.25s ease forwards; }
   .contact-back-btn { display: flex; }
   .contact-close-btn { display: flex !important; }
 }
 
 /* ═══ TABLET (iPad 769–1024px) ══════════════════════════════════════════════ */
 @media (min-width: 769px) and (max-width: 1024px) {
-  /* Contacts: panel becomes centred modal overlay */
+  /* Contacts: panel becomes centred modal overlay with scale animation */
   .contacts-layout { grid-template-columns: 1fr !important; }
-  .contact-detail-panel { display: none !important; }
-  .contact-detail-panel.mobile-open {
+  .contact-detail-panel {
     display: flex !important;
     position: fixed !important;
     top: 50% !important;
     left: 50% !important;
     right: auto !important;
     bottom: auto !important;
-    transform: translate(-50%, -50%);
-    width: min(500px, 90vw);
-    max-height: 85vh;
-    overflow-y: auto;
+    width: min(500px, 90vw) !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
     border-radius: 16px !important;
     border: 1px solid var(--border-strong) !important;
-    z-index: 300;
-    align-self: unset;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-    padding: 20px;
+    z-index: 300 !important;
+    align-self: unset !important;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6) !important;
+    padding: 20px !important;
+    transform: translate(-50%, -48%) scale(0.94);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease;
+  }
+  .contact-detail-panel.mobile-open {
+    transform: translate(-50%, -50%) scale(1) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
   }
 
   /* Contact row: hide extra columns like on mobile */
