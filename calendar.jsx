@@ -224,8 +224,8 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
 
         {isExpanded && (
           <div style={{ position:'absolute', top:height + 4, left:0, right:0, minWidth:180, zIndex:40,
-            background:'var(--surface-2)', border:'1px solid var(--border-strong)', borderRadius:8,
-            boxShadow:'0 8px 32px rgba(0,0,0,0.55)', overflow:'hidden',
+            background:'#0e0e12', border:'1px solid var(--border-strong)', borderRadius:8,
+            boxShadow:'0 8px 32px rgba(0,0,0,0.85)', overflow:'hidden',
             animation:'scaleIn 0.14s cubic-bezier(0.16,1,0.3,1)' }}
             onClick={e => e.stopPropagation()}>
             {group.map((ev, i) => {
