@@ -512,6 +512,44 @@ module.exports.handler = async (event) => {
           return reply({ ok: true });
         }
 
+        // Task due date buttons
+        if (['task_due_today', 'task_due_tomorrow', 'task_due_none'].includes(data)) {
+          const { task_type, task_title } = userState;
+          if (!task_type || !task_title) {
+            await tgAnswer(callbackId, 'Состояние устарело, начни заново');
+            return reply({ ok: true });
+          }
+          const mosNow = new Date(new Date().getTime() + 3 * 3600 * 1000);
+          const mkIso = (dt) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+          const due = data === 'task_due_today'    ? mkIso(mosNow)
+                    : data === 'task_due_tomorrow' ? mkIso(new Date(mosNow.getTime() + 86400000))
+                    : '';
+          const typeMap  = { task_work: 'work',    task_personal: 'personal', task_study: 'study' };
+          const tagMap   = { task_work: 'Работа',  task_personal: 'Личное',   task_study: 'Учёба' };
+          const idMap    = { task_work: 'w',        task_personal: 'p',        task_study: 'e'     };
+          const labelMap = { task_work: '💼 Рабочая', task_personal: '🏠 Личная', task_study: '📚 Учебная' };
+          const tasks = await getTable(storToken, 'tasks');
+          tasks.push({
+            id: idMap[task_type] + Date.now(),
+            title: task_title,
+            type: typeMap[task_type],
+            priority: 'med',
+            done: 0,
+            due,
+            time: '',
+            tag: tagMap[task_type],
+            description: '📱 Из Telegram',
+            reminder: -1,
+          });
+          await saveTable(storToken, 'tasks', tasks);
+          delete allState[chatId];
+          await saveBotState(storToken, allState);
+          const dueLabel = due ? `📅 ${due}` : 'без срока';
+          await tgEdit(chatId, messageId,
+            `✅ ${labelMap[task_type]} задача создана:\n<b>${task_title}</b>\n${dueLabel}`);
+          return reply({ ok: true });
+        }
+
         // 📋 List open tasks
         if (data === 'list_tasks') {
           const tasks = await getTable(storToken, 'tasks');
@@ -562,31 +600,70 @@ module.exports.handler = async (event) => {
       if (userState.waiting) {
         const { waiting } = userState;
 
-        // Waiting for task title
+        // Waiting for task title — ask for due date with inline buttons
         if (['task_work', 'task_personal', 'task_study'].includes(waiting)) {
-          const typeMap  = { task_work: 'work',    task_personal: 'personal', task_study: 'study'   };
-          const tagMap   = { task_work: 'Риэлтор', task_personal: 'Личное',   task_study: 'Учёба'   };
-          const idMap    = { task_work: 'w',        task_personal: 'p',        task_study: 'e'       };
           const labelMap = { task_work: '💼 Рабочая', task_personal: '🏠 Личная', task_study: '📚 Учебная' };
+          allState[chatId] = { waiting: 'task_due', task_type: waiting, task_title: text };
+          await saveBotState(storToken, allState);
+          await tgSend(chatId,
+            `✅ ${labelMap[waiting]} задача: <b>${text}</b>\n\nНа какой срок?`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '📅 Сегодня', callback_data: 'task_due_today' },
+                    { text: '📅 Завтра',  callback_data: 'task_due_tomorrow' },
+                  ],
+                  [
+                    { text: '📆 Без срока', callback_data: 'task_due_none' },
+                  ],
+                ],
+              },
+            }
+          );
+          return reply({ ok: true });
+        }
 
+        // Waiting for task due date (after title was entered) — handled via callback, but also accept text
+        if (waiting === 'task_due') {
+          // User typed instead of clicking — parse as date
+          const mosNow = new Date(new Date().getTime() + 3 * 3600 * 1000);
+          const mkIso = (dt) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+          let due = '';
+          const s = text.toLowerCase().trim();
+          if (s === 'сегодня' || s === 'today') due = mkIso(mosNow);
+          else if (s === 'завтра' || s === 'tomorrow') due = mkIso(new Date(mosNow.getTime() + 86400000));
+          else if (s === 'нет' || s === 'без срока' || s === '-') due = '';
+          else {
+            const dot = s.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$/);
+            if (dot) due = `${dot[3] || mosNow.getUTCFullYear()}-${dot[2].padStart(2,'0')}-${dot[1].padStart(2,'0')}`;
+            const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (iso) due = s;
+          }
+          const { task_type, task_title } = userState;
+          const typeMap  = { task_work: 'work',    task_personal: 'personal', task_study: 'study' };
+          const tagMap   = { task_work: 'Работа',  task_personal: 'Личное',   task_study: 'Учёба' };
+          const idMap    = { task_work: 'w',        task_personal: 'p',        task_study: 'e'     };
+          const labelMap = { task_work: '💼 Рабочая', task_personal: '🏠 Личная', task_study: '📚 Учебная' };
           const tasks = await getTable(storToken, 'tasks');
           tasks.push({
-            id:          idMap[waiting] + Date.now(),
-            title:       text,
-            type:        typeMap[waiting],
-            priority:    'med',
-            done:        0,
-            due:         '',
-            time:        '',
-            tag:         tagMap[waiting],
+            id: idMap[task_type] + Date.now(),
+            title: task_title,
+            type: typeMap[task_type],
+            priority: 'med',
+            done: 0,
+            due,
+            time: '',
+            tag: tagMap[task_type],
             description: '📱 Из Telegram',
-            reminder:    -1,
+            reminder: -1,
           });
           await saveTable(storToken, 'tasks', tasks);
           delete allState[chatId];
           await saveBotState(storToken, allState);
+          const dueLabel = due ? `📅 ${due}` : 'без срока';
           await tgSend(chatId,
-            `✅ ${labelMap[waiting]} задача создана:\n<b>${text}</b>`,
+            `✅ ${labelMap[task_type]} задача создана:\n<b>${task_title}</b>\n${dueLabel}`,
             { reply_markup: MAIN_KB });
           return reply({ ok: true });
         }

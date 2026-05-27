@@ -28,6 +28,7 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
   const [savingFolder, setSavingFolder] = React.useState(false);
   const [showMoveNote, setShowMoveNote] = React.useState(false);
   const [moveNoteFolderId, setMoveNoteFolderId] = React.useState('');
+  const [moveFileId, setMoveFileId] = React.useState(null);
   const editorRef    = React.useRef(null);
   const saveTimerRef = React.useRef(null);
   const fileInputRef = React.useRef(null);
@@ -288,6 +289,13 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
     setRenameFile(null);
   };
 
+  const handleMoveFile = async (folderId) => {
+    if (!moveFileId) return;
+    await updateFileRecord(moveFileId, { folder: folderId });
+    await refresh();
+    setMoveFileId(null);
+  };
+
   const renderFileMenu = (file) => (
     <button className="icon-btn file-menu-btn"
       style={{ width:26, height:26, flexShrink:0, opacity: fileMenuPos?.id === file.id ? 1 : undefined }}
@@ -295,7 +303,11 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
         e.stopPropagation();
         if (fileMenuPos?.id === file.id) { setFileMenuPos(null); return; }
         const r = e.currentTarget.getBoundingClientRect();
-        setFileMenuPos({ id: file.id, top: r.bottom + 4, left: r.right - 168 });
+        const menuH = 180;
+        const menuW = 200;
+        const top = r.bottom + 4 + menuH > window.innerHeight ? r.top - menuH - 4 : r.bottom + 4;
+        const left = Math.max(4, Math.min(r.right - menuW, window.innerWidth - menuW - 4));
+        setFileMenuPos({ id: file.id, top, left });
       }}
       title="Действия">
       <Icon name="more" size={14} />
@@ -725,6 +737,11 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
                 <span style={{ fontSize:13, lineHeight:1 }}>{f.quick_access ? '★' : '☆'}</span>
                 {f.quick_access ? 'Убрать из быстрого доступа' : 'Быстрый доступ'}
               </button>
+              {FILE_FOLDERS.length > 0 && (
+                <button className="file-dropdown-item" onClick={() => { setFileMenuPos(null); setMoveFileId(f.id); }}>
+                  <Icon name="folder" size={13} /> Переместить в папку
+                </button>
+              )}
               {!f.demo && (
                 <button className="file-dropdown-item danger" onClick={() => handleDeleteFile(f)}>
                   <Icon name="trash" size={13} /> Удалить
@@ -745,6 +762,26 @@ const StoragePage = ({ D, refresh: refreshAll, navTarget, onNavConsumed }) => {
             <FInput autoFocus value={renameName} onChange={e => setRenameName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleRename()} placeholder="Название файла…" />
           </Field>
+        </Modal>
+      )}
+
+      {moveFileId && (
+        <Modal title="Переместить в папку"
+          onClose={() => setMoveFileId(null)}
+          onConfirm={null}
+          confirmLabel="">
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <button className="btn ghost" style={{ justifyContent:'flex-start', width:'100%', padding:'8px 12px' }}
+              onClick={() => handleMoveFile('')}>
+              <Icon name="folder" size={13} /> Без папки
+            </button>
+            {FILE_FOLDERS.map(fl => (
+              <button key={fl.id} className="btn ghost" style={{ justifyContent:'flex-start', width:'100%', padding:'8px 12px', color: fl.color }}
+                onClick={() => handleMoveFile(fl.id)}>
+                <Icon name={fl.icon || 'folder'} size={13} /> {fl.name}
+              </button>
+            ))}
+          </div>
         </Modal>
       )}
     </div>

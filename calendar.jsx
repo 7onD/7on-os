@@ -292,7 +292,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   // ── Week view ──────────────────────────────────────────────────────────────
   const renderWeekView = () => (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:16 }} className="cal-desktop">
-      <div className="fcal" style={{ gridTemplateRows:`auto 54px repeat(${HOURS.length}, ${cellH}px)` }}>
+      <div className="fcal" style={{ gridTemplateRows:`auto auto repeat(${HOURS.length}, ${cellH}px)` }}>
         <div className="fcal-corner" />
         {DAYS.map(d => (
           <div key={d.num} className="fcal-dow" data-today={d.today ? '1' : '0'}>
@@ -300,13 +300,13 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           </div>
         ))}
         {/* All-day events row */}
-        <div className="fcal-hour" style={{ height:54, boxSizing:'border-box', fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
+        <div className="fcal-hour" style={{ minHeight:54, boxSizing:'border-box', fontSize:9, color:'var(--text-faint)', alignItems:'flex-start', paddingTop:4 }}>весь<br/>день</div>
         {DAYS.map((d, di) => {
           const allDay = D.EVENTS.filter(e => eventMatchesDay(e, di) && e.start === -1);
           const dayIso = dayToIso(DAYS[di]);
           const dayDeadlines = allTasksList.filter(t => !t.done && t.deadline === dayIso);
           return (
-            <div key={di} className="fcal-cell" style={{ height:54, overflow:'hidden', padding:'2px 3px', display:'flex', flexDirection:'column', gap:2, alignContent:'flex-start' }}>
+            <div key={di} className="fcal-cell" style={{ minHeight:54, padding:'2px 3px', display:'flex', flexDirection:'column', gap:2, alignContent:'flex-start' }}>
               {allDay.map(e => {
                 const color = KIND_COLORS[e.kind] || '#888';
                 return (
@@ -535,7 +535,10 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
             {MONTHS_RU[month]} {year}
           </div>
           <button className="btn" onClick={() => setMonthOffset(o => o + 1)}><Icon name="chevron-right" size={12} /></button>
-          <button className="btn ghost" onClick={() => setMonthOffset(0)} disabled={monthOffset === 0}>Текущий</button>
+          {opts.onToday
+            ? <button className="btn ghost" onClick={opts.onToday}>Сегодня</button>
+            : <button className="btn ghost" onClick={() => setMonthOffset(0)} disabled={monthOffset === 0}>Текущий</button>
+          }
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:1, background: opts.compact ? 'transparent' : 'var(--border)' }}
           className={opts.compact ? 'cal-month-compact-grid' : ''}>
@@ -652,6 +655,7 @@ const CalendarPage = ({ D, refresh, navTarget, onNavConsumed }) => {
               compact: true,
               selDate: monthSelDate,
               onDaySel: ({ iso }) => setMonthSelDate(iso),
+              onToday: () => { setMonthOffset(0); setWeekOffset(todayWeekOffset); setMonthSelDate(todayIso); },
             })}
             {/* Day event list — updates when you tap a cell */}
             {(() => {

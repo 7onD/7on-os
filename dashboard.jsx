@@ -86,7 +86,18 @@ const Dashboard = ({ D, setRoute, refresh }) => {
     }
     await refresh();
   };
-  const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
+  const handleDelete = async (id) => {
+    const task = allTasks.find(t => t.id === id);
+    if (task) {
+      const linkedEv = D.EVENTS.find(e =>
+        e.task_id === id ||
+        (!e.task_id && (e.title||'').trim() === (task.title||'').trim() && (e.event_date||'') === (task.due||''))
+      );
+      if (linkedEv) await deleteEvent(linkedEv.id);
+    }
+    await deleteTask(id);
+    await refresh();
+  };
   const handleOpen = (task) => { if (window.SEVEN_NAV) window.SEVEN_NAV('tasks', { kind: 'task', id: task.id }); };
 
   const makeDashReorder = (fullList) => async (newTasks) => {
@@ -133,7 +144,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Личные задачи <span className="count">{personalCount}</span></div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isHiddenDash(t))).slice(0, 10)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.PERSONAL_TASKS)} />
+          <TaskGroupedList tasks={sortForDash(D.PERSONAL_TASKS.filter(t => !isHiddenDash(t))).slice(0, 20)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />
         </div>
 
         <div className="card" style={{ gridColumn: 'span 4' }}>
@@ -141,7 +152,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Рабочие задачи <span className="count">{workCount}</span></div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash(D.WORK_TASKS.filter(t => !isHiddenDash(t))).slice(0, 10)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.WORK_TASKS)} />
+          <TaskGroupedList tasks={sortForDash(D.WORK_TASKS.filter(t => !isHiddenDash(t))).slice(0, 20)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />
         </div>
 
         <div className="card" style={{ gridColumn: 'span 4' }}>
@@ -149,7 +160,7 @@ const Dashboard = ({ D, setRoute, refresh }) => {
             <div className="card-title">Учебные задачи <span className="count">{studyCount}</span></div>
             <button className="card-link" onClick={() => setRoute('tasks')}>открыть →</button>
           </div>
-          <TaskDragList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isHiddenDash(t))).slice(0, 10)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} onReorder={makeDashReorder(D.STUDY_TASKS || [])} />
+          <TaskGroupedList tasks={sortForDash((D.STUDY_TASKS || []).filter(t => !isHiddenDash(t))).slice(0, 20)} onToggle={handleToggle} onDelete={handleDelete} onOpen={handleOpen} />
         </div>
 
         {/* ── Row 3: Calendar (4) + Hot leads (8) ── */}

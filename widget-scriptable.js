@@ -132,7 +132,8 @@ async function createWidget() {
     )
     .sort((a,b) => (a.start_time??99)-(b.start_time??99))
 
-  const MAX = 4  // максимум строк в каждом столбце
+  const MAX = 4       // максимум строк событий
+  const TASK_MAX = 5  // максимум строк задач (помещается ещё одна)
 
   // ══ Виджет ═══════════════════════════════════════════════════════════════════
   const w = new ListWidget()
@@ -245,7 +246,7 @@ async function createWidget() {
     none.font = Font.systemFont(10)
     none.textColor = C.faint
   } else {
-    allTasks.slice(0, MAX).forEach(t => {
+    allTasks.slice(0, TASK_MAX).forEach(t => {
       addRow(right, {
         barColor: t._ov ? C.red : t._dl ? C.orange : (PRIO_CLR[t.priority] || C.faint),
         time: t.time || null,
@@ -255,8 +256,8 @@ async function createWidget() {
       })
       right.addSpacer(4)
     })
-    if (allTasks.length > MAX) {
-      const more = right.addText(`  +${allTasks.length - MAX}...`)
+    if (allTasks.length > TASK_MAX) {
+      const more = right.addText(`  +${allTasks.length - TASK_MAX}...`)
       more.font = Font.systemFont(9)
       more.textColor = C.faint
     }

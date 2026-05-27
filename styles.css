@@ -1655,3 +1655,13 @@ button {
   .cal-mobile [style*="repeat(7,1fr)"] > * { min-width: 0; overflow: hidden; }
 }
 
+/* ═══ MOBILE DASHBOARD ═══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .grid.cols-12 {
+    grid-template-columns: 1fr;
+  }
+  .grid.cols-12 > .card {
+    grid-column: 1 / -1 !important;
+  }
+}
+

@@ -11,6 +11,16 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const [detailForm, setDetailForm] = React.useState({});
   const [detailSaving, setDetailSaving] = React.useState(false);
 
+  // Midnight refresh: force re-render when the date rolls over so done-today tasks move to "done"
+  const [_dateTick, _setDateTick] = React.useState(0);
+  React.useEffect(() => {
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    const ms = midnight.getTime() - now.getTime();
+    const timer = setTimeout(() => { _setDateTick(t => t + 1); refresh(); }, ms);
+    return () => clearTimeout(timer);
+  }, [_dateTick]);
+
   const TYPE_TAG_DEFAULT = { personal: 'Личное', study: 'Учёба', work: 'Работа' };
   const _todayStr = new Date().toISOString().slice(0, 10);
   // "done today" = marked done AND done_at matches today
@@ -85,7 +95,18 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
     }
     await refresh();
   };
-  const handleDelete = async (id) => { await deleteTask(id); await refresh(); };
+  const handleDelete = async (id) => {
+    const task = allTasks.find(t => t.id === id);
+    if (task) {
+      const linkedEv = D.EVENTS.find(e =>
+        e.task_id === id ||
+        (!e.task_id && (e.title||'').trim() === (task.title||'').trim() && (e.event_date||'') === (task.due||''))
+      );
+      if (linkedEv) await deleteEvent(linkedEv.id);
+    }
+    await deleteTask(id);
+    await refresh();
+  };
 
   const handleAdd = async () => {
     if (!form.title.trim()) return;
@@ -185,7 +206,16 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
   const handleDetailDelete = async () => {
     if (!detailTask || !confirm('Удалить задачу?')) return;
     setDetailSaving(true);
-    try { await deleteTask(detailTask.id); await refresh(); setDetailTask(null); }
+    try {
+      const linkedEv = D.EVENTS.find(e =>
+        e.task_id === detailTask.id ||
+        (!e.task_id && (e.title||'').trim() === (detailTask.title||'').trim() && (e.event_date||'') === (detailTask.due||''))
+      );
+      if (linkedEv) await deleteEvent(linkedEv.id);
+      await deleteTask(detailTask.id);
+      await refresh();
+      setDetailTask(null);
+    }
     finally { setDetailSaving(false); }
   };
 
@@ -227,11 +257,7 @@ const TasksPage = ({ D, refresh, navTarget, onNavConsumed }) => {
           <Icon name="plus" size={13} /> Задача
         </button>
       </div>
-      <TaskDragList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail}
-        onReorder={async (newTasks) => {
-          await Promise.all(newTasks.map((t, i) => updateTask(t.id, { sort_order: i })));
-          await refresh();
-        }} />
+      <TaskGroupedList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} onOpen={openDetail} />
     </div>
   );
 

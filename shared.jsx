@@ -542,5 +542,47 @@ const TaskDragList = ({ tasks, onToggle, onDelete, onOpen, onReorder }) => {
   );
 };
 
-Object.assign(window, { TaskRow, TaskDragList, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea,
+// ── TaskGroupedList ───────────────────────────────────────────────────────────
+// Shows tasks grouped by time period: Сегодня / Завтра / На этой неделе / Без срока
+const TaskGroupedList = ({ tasks, onToggle, onDelete, onOpen }) => {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowStr = tomorrowDate.toISOString().slice(0, 10);
+  // end of this week = nearest Sunday (or +6 days if today is Sunday)
+  const weekEndDate = new Date();
+  const dow = weekEndDate.getDay(); // 0=Sun
+  const daysToSun = dow === 0 ? 6 : 7 - dow;
+  weekEndDate.setDate(weekEndDate.getDate() + daysToSun);
+  const weekEndStr = weekEndDate.toISOString().slice(0, 10);
+
+  const groups = [
+    { key: 'today',    label: 'Сегодня',           pred: t => !!t.due && t.due <= todayStr },
+    { key: 'tomorrow', label: 'Завтра',             pred: t => t.due === tomorrowStr },
+    { key: 'week',     label: 'На этой неделе',     pred: t => !!t.due && t.due > tomorrowStr && t.due <= weekEndStr },
+    { key: 'nodue',    label: 'Без срока',          pred: t => !t.due || t.due > weekEndStr },
+  ];
+
+  const grouped = groups.map(g => ({ ...g, tasks: tasks.filter(g.pred) })).filter(g => g.tasks.length > 0);
+
+  if (grouped.length === 0) return (
+    <div className="placeholder">Нет задач</div>
+  );
+
+  return (
+    <div>
+      {grouped.map(g => (
+        <div key={g.key}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '8px 0 4px', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
+            {g.label}
+          </div>
+          {g.tasks.map(task => (
+            <TaskRow key={task.id} task={task} onToggle={onToggle} onDelete={onDelete} onOpen={onOpen} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+Object.assign(window, { TaskRow, TaskDragList, TaskGroupedList, MiniCal, BarChart, StatusTag, Modal, Field, FInput, FSelect, FTextarea,
   SlashLinkMenu, DescriptionWithLinks, extractLinks, stripLinks });
